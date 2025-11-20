@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import GameImage from '../components/GameImage';
 
 export default function GameDetailScreen({ route }) {
   const { game } = route.params || {};
@@ -16,7 +17,12 @@ export default function GameDetailScreen({ route }) {
     <ScrollView style={styles.container}>
       <View style={styles.content}>
         <View style={styles.header}>
-          <Text style={styles.title}>{game.name}</Text>
+          <GameImage 
+            gameName={game.name || game.game_name}
+            style={styles.gameImage}
+            resizeMode="cover"
+          />
+          <Text style={styles.title}>{game.name || game.game_name}</Text>
           <Text style={styles.genre}>{game.genre || 'Unknown Genre'}</Text>
         </View>
 
@@ -24,7 +30,7 @@ export default function GameDetailScreen({ route }) {
           <View style={styles.infoRow}>
             <Text style={styles.label}>Rating:</Text>
             <Text style={styles.value}>
-              {game.rating ? `${game.rating}/10` : 'Not rated'}
+              {game.rating ? Math.max(0, Math.min(10, parseFloat(game.rating))).toFixed(1) : 'Not rated'}
             </Text>
           </View>
 
@@ -64,12 +70,21 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#636e72',
+    alignItems: 'center',
+  },
+  gameImage: {
+    width: 200,
+    height: 280,
+    borderRadius: 12,
+    marginBottom: 20,
+    backgroundColor: '#2d3436',
   },
   title: {
     fontSize: 32,
     fontWeight: 'bold',
     color: '#fff',
     marginBottom: 10,
+    textAlign: 'center',
   },
   genre: {
     fontSize: 18,

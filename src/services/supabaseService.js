@@ -180,6 +180,47 @@ export const rankingsService = {
       return { data: null, error };
     }
   },
+
+  // Get average ratings for all games (aggregated from all users)
+  async getAverageRatings() {
+    try {
+      const { data, error } = await supabase
+        .from('game_rankings')
+        .select('game_name, rating, genre')
+        .not('rating', 'is', null);
+
+      if (error) throw error;
+
+      // Calculate average rating per game
+      const gameRatings = {};
+      data.forEach(item => {
+        const gameName = item.game_name;
+        if (!gameRatings[gameName]) {
+          gameRatings[gameName] = {
+            name: gameName,
+            genre: item.genre,
+            ratings: [],
+            averageRating: 0,
+            count: 0,
+          };
+        }
+        gameRatings[gameName].ratings.push(parseFloat(item.rating));
+        gameRatings[gameName].count++;
+      });
+
+      // Calculate averages
+      const averages = Object.values(gameRatings).map(game => ({
+        name: game.name,
+        genre: game.genre,
+        averageRating: game.ratings.reduce((sum, r) => sum + r, 0) / game.ratings.length,
+        ratingCount: game.count,
+      }));
+
+      return { data: averages, error: null };
+    } catch (error) {
+      return { data: null, error };
+    }
+  },
 };
 
 // Profile functions

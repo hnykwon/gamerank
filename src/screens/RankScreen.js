@@ -14,7 +14,8 @@ import {
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { supabase } from '../config/supabase';
 import { rankingsService } from '../services/supabaseService';
-import { searchGames } from '../data/gameList';
+import { searchGames } from '../services/gameDatabaseService';
+import GameImage from '../components/GameImage';
 
 export default function RankScreen() {
   const [gameName, setGameName] = useState('');
@@ -45,15 +46,25 @@ export default function RankScreen() {
   }, [route.params]);
 
   useEffect(() => {
-    if (searchQuery.trim().length > 0) {
-      const results = searchGames(searchQuery);
-      // Limit results to 10 to avoid needing nested scrolling
-      setSearchResults(results.slice(0, 10));
-      setShowSearchResults(true);
-    } else {
-      setSearchResults([]);
-      setShowSearchResults(false);
-    }
+    const performSearch = async () => {
+      if (searchQuery.trim().length > 0) {
+        try {
+          const results = await searchGames(searchQuery);
+          // Limit results to 10 to avoid needing nested scrolling
+          setSearchResults(results.slice(0, 10));
+          setShowSearchResults(true);
+        } catch (error) {
+          console.error('Search error:', error);
+          setSearchResults([]);
+          setShowSearchResults(false);
+        }
+      } else {
+        setSearchResults([]);
+        setShowSearchResults(false);
+      }
+    };
+
+    performSearch();
   }, [searchQuery]);
 
   const loadExistingGames = async () => {
@@ -130,12 +141,14 @@ export default function RankScreen() {
       setComparisonHistory([]);
       setComparisonModal(true);
     } else {
-      // No games in this category, save directly
-      const baseScore = stars * 2; // 1 star = 2.0, 2 stars = 4.0, etc.
+      // No games in this category, save directly with middle score
+      const minScore = (stars - 1) * 2;
+      const maxScore = stars * 2;
+      const middleScore = (minScore + maxScore) / 2;
       saveGame({ 
         name: selectedGame.name, 
         genre: selectedGame.genre, 
-        rating: baseScore.toString(),
+        rating: middleScore.toFixed(2),
         starRating: stars 
       });
     }
@@ -151,10 +164,13 @@ export default function RankScreen() {
         return;
       }
 
+      // Clamp rating between 0 and 10
+      const rating = Math.max(0, Math.min(10, parseFloat(game.rating || '0')));
+
       const { data, error } = await rankingsService.addRanking(user.id, {
         name: game.name,
         genre: game.genre || 'Unknown',
-        rating: game.rating || '0',
+        rating: rating.toFixed(2),
         starRating: game.starRating || 0,
       });
 
@@ -193,17 +209,25 @@ export default function RankScreen() {
   };
 
   const calculateRating = (position, totalGames, starRating) => {
-    // Base score for the star rating
-    const baseScore = starRating * 2; // 1 star = 2.0, 2 stars = 4.0, etc.
+    // Each star category gets a 2-point range:
+    // 1 star: 0-2, 2 star: 2-4, 3 star: 4-6, 4 star: 6-8, 5 star: 8-10
+    const minScore = (starRating - 1) * 2; // Minimum for this star category
+    const maxScore = starRating * 2; // Maximum for this star category
+    const range = maxScore - minScore; // Always 2
     
     if (totalGames === 0) {
-      return baseScore;
+      // If no games to compare, give it the middle of the range
+      return (minScore + maxScore) / 2;
     }
     
     // Calculate position within the star category
-    // Position 0 (best) gets baseScore + 0.9, position last gets baseScore + 0.1
-    const positionOffset = 0.9 - (position / totalGames) * 0.8;
-    return baseScore + positionOffset;
+    // Position 0 (best) gets maxScore, position last gets minScore
+    // For position at end (worst), use totalGames as position
+    const normalizedPosition = position === totalGames ? totalGames : position;
+    const score = maxScore - (normalizedPosition / totalGames) * range;
+    
+    // Clamp between 0 and 10 to ensure it never goes outside bounds
+    return Math.max(0, Math.min(10, score));
   };
 
   const handleGameChoice = (preferredGame) => {
@@ -250,6 +274,15 @@ export default function RankScreen() {
     finishComparisonAtEnd();
   };
 
+  const handleCancelComparison = () => {
+    setComparisonModal(false);
+    setSelectedGame(null);
+    setSelectedStarRating(0);
+    setCurrentComparisonIndex(0);
+    setComparisonHistory([]);
+    setGamesToCompare([]);
+  };
+
   const finishComparison = async () => {
     // Calculate position based on comparison history
     let position = gamesToCompare.length;
@@ -284,10 +317,13 @@ export default function RankScreen() {
         return;
       }
 
+      // Clamp rating between 0 and 10
+      const clampedRating = Math.max(0, Math.min(10, numericalRating));
+
       const { data, error } = await rankingsService.addRanking(user.id, {
         name: selectedGame.name,
         genre: selectedGame.genre || 'Unknown',
-        rating: numericalRating.toFixed(2),
+        rating: clampedRating.toFixed(2),
         starRating: selectedStarRating,
       });
 
@@ -337,6 +373,13 @@ export default function RankScreen() {
     setGameGenre(game.genre);
     setSearchQuery('');
     setShowSearchResults(false);
+    
+    // Immediately show star rating modal
+    setSelectedGame({
+      name: game.name,
+      genre: game.genre,
+    });
+    setStarRatingModal(true);
   };
 
 
@@ -371,8 +414,15 @@ export default function RankScreen() {
                     style={styles.searchResultItem}
                     onPress={() => handleSelectGame(item)}
                   >
-                    <Text style={styles.searchResultName}>{item.name}</Text>
-                    <Text style={styles.searchResultGenre}>{item.genre}</Text>
+                    <GameImage 
+                      gameName={item.name}
+                      style={styles.searchResultImage}
+                      resizeMode="cover"
+                    />
+                    <View style={styles.searchResultTextContainer}>
+                      <Text style={styles.searchResultName}>{item.name}</Text>
+                      <Text style={styles.searchResultGenre}>{item.genre}</Text>
+                    </View>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -383,28 +433,6 @@ export default function RankScreen() {
               </View>
             )}
           </View>
-
-          <Text style={styles.label}>Selected Game</Text>
-          <TextInput
-            style={[styles.input, !gameName && styles.inputDisabled]}
-            placeholder="Game will appear here after selection"
-            placeholderTextColor="#95a5a6"
-            value={gameName}
-            editable={false}
-          />
-
-          <Text style={styles.label}>Genre</Text>
-          <TextInput
-            style={[styles.input, !gameGenre && styles.inputDisabled]}
-            placeholder="Genre will appear here after selection"
-            placeholderTextColor="#95a5a6"
-            value={gameGenre}
-            editable={false}
-          />
-
-          <TouchableOpacity style={styles.button} onPress={handleRankGame}>
-            <Text style={styles.buttonText}>Add to Rankings</Text>
-          </TouchableOpacity>
         </View>
       </View>
 
@@ -482,71 +510,62 @@ export default function RankScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Which do you prefer?</Text>
-            <Text style={styles.comparisonProgress}>
-              {currentComparisonIndex + 1} of {gamesToCompare.length}
-            </Text>
+            <View style={styles.modalTitleContainer}>
+              <Text style={styles.modalTitle}>Which do you prefer?</Text>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={handleCancelComparison}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Text style={styles.closeButtonText}>×</Text>
+              </TouchableOpacity>
+            </View>
 
             {/* Side by Side Comparison */}
             <View style={styles.sideBySideContainer}>
               {/* New Game (Left) */}
               <TouchableOpacity
-                style={styles.comparisonCard}
+                style={[styles.comparisonCard, { marginRight: 7.5 }]}
                 onPress={() => handleGameChoice('new')}
                 activeOpacity={0.7}
               >
-                <Text style={styles.comparisonCardLabel}>New Game</Text>
-                <Text style={styles.comparisonGameName} numberOfLines={2}>
+                {selectedGame?.name && (
+                  <GameImage 
+                    gameName={selectedGame.name}
+                    style={styles.comparisonCardImage}
+                    resizeMode="cover"
+                  />
+                )}
+                <Text style={styles.comparisonGameNameCenter} numberOfLines={3}>
                   {selectedGame?.name}
                 </Text>
                 <Text style={styles.comparisonGameGenre}>{selectedGame?.genre}</Text>
-                <View style={styles.starDisplayRow}>
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <Text
-                      key={star}
-                      style={[
-                        styles.starSmall,
-                        star <= selectedStarRating && styles.starFilled,
-                      ]}
-                    >
-                      ★
-                    </Text>
-                  ))}
-                </View>
+                <Text style={styles.ratingScore}>
+                  {selectedStarRating} {selectedStarRating === 1 ? 'Star' : 'Stars'}
+                </Text>
               </TouchableOpacity>
-
-              {/* VS Divider */}
-              <View style={{ marginHorizontal: 10 }}>
-                <Text style={styles.vsText}>VS</Text>
-              </View>
 
               {/* Existing Game (Right) */}
               {gamesToCompare[currentComparisonIndex] && (
                 <TouchableOpacity
-                  style={styles.comparisonCard}
+                  style={[styles.comparisonCard, { marginLeft: 7.5 }]}
                   onPress={() => handleGameChoice('existing')}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.comparisonCardLabel}>Existing</Text>
-                  <Text style={styles.comparisonGameName} numberOfLines={2}>
+                  <GameImage 
+                    gameName={gamesToCompare[currentComparisonIndex].name}
+                    style={styles.comparisonCardImage}
+                    resizeMode="cover"
+                  />
+                  <Text style={styles.comparisonGameNameCenter} numberOfLines={3}>
                     {gamesToCompare[currentComparisonIndex].name}
                   </Text>
                   <Text style={styles.comparisonGameGenre}>
                     {gamesToCompare[currentComparisonIndex].genre}
                   </Text>
-                  <View style={styles.starDisplayRow}>
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <Text
-                        key={star}
-                        style={[
-                          styles.starSmall,
-                          star <= selectedStarRating && styles.starFilled,
-                        ]}
-                      >
-                        ★
-                      </Text>
-                    ))}
-                  </View>
+                  <Text style={styles.ratingScore}>
+                    {Math.max(0, Math.min(10, parseFloat(gamesToCompare[currentComparisonIndex].rating || 0))).toFixed(1)}
+                  </Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -567,7 +586,7 @@ export default function RankScreen() {
                 style={[styles.actionButton, styles.tooToughButton, { marginHorizontal: 5 }]}
                 onPress={handleTooTough}
               >
-                <Text style={styles.actionButtonText}>Too Tough</Text>
+                <Text style={[styles.actionButtonText, styles.centeredButtonText]}>Too Tough</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -646,15 +665,37 @@ const styles = StyleSheet.create({
     backgroundColor: '#2d3436',
     borderRadius: 20,
     padding: 20,
-    width: '90%',
+    width: '95%',
     maxHeight: '80%',
+  },
+  modalTitleContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+    width: '100%',
   },
   modalTitle: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#fff',
-    marginBottom: 10,
     textAlign: 'center',
+    flex: 1,
+  },
+  closeButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#636e72',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 10,
+  },
+  closeButtonText: {
+    color: '#fff',
+    fontSize: 24,
+    fontWeight: 'bold',
+    lineHeight: 24,
   },
   modalSubtitle: {
     fontSize: 16,
@@ -679,6 +720,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 5,
+  },
+  comparisonGameNameCenter: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 10,
+    paddingHorizontal: 5,
   },
   comparisonText: {
     color: '#74b9ff',
@@ -724,9 +773,21 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   searchResultItem: {
+    flexDirection: 'row',
     padding: 15,
     borderBottomWidth: 1,
     borderBottomColor: '#1a1a2e',
+    alignItems: 'center',
+  },
+  searchResultImage: {
+    width: 50,
+    height: 70,
+    borderRadius: 8,
+    marginRight: 12,
+    backgroundColor: '#1a1a2e',
+  },
+  searchResultTextContainer: {
+    flex: 1,
   },
   searchResultName: {
     color: '#fff',
@@ -814,6 +875,7 @@ const styles = StyleSheet.create({
     color: '#95a5a6',
     fontSize: 14,
     marginTop: 4,
+    textAlign: 'center',
   },
   comparisonInstruction: {
     color: '#74b9ff',
@@ -833,17 +895,26 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 30,
+    width: '100%',
   },
   comparisonCard: {
     flex: 1,
     backgroundColor: '#1a1a2e',
     borderRadius: 12,
-    padding: 20,
+    padding: 15,
     alignItems: 'center',
     borderWidth: 2,
     borderColor: '#636e72',
-    minHeight: 200,
-    justifyContent: 'center',
+    minHeight: 280,
+    justifyContent: 'flex-start',
+    minWidth: '45%',
+  },
+  comparisonCardImage: {
+    width: '100%',
+    height: 140,
+    borderRadius: 8,
+    marginBottom: 10,
+    backgroundColor: '#2d3436',
   },
   comparisonCardLabel: {
     color: '#6c5ce7',
@@ -884,6 +955,16 @@ const styles = StyleSheet.create({
   },
   disabledButtonText: {
     opacity: 0.5,
+  },
+  ratingScore: {
+    color: '#fdcb6e',
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  centeredButtonText: {
+    textAlign: 'center',
   },
 });
 

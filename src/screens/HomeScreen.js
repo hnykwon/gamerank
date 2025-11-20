@@ -6,10 +6,12 @@ import {
   TouchableOpacity,
   StyleSheet,
   RefreshControl,
+  Image,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../config/supabase';
 import { rankingsService } from '../services/supabaseService';
+import GameImage from '../components/GameImage';
 
 export default function HomeScreen() {
   const [rankings, setRankings] = useState([]);
@@ -90,12 +92,17 @@ export default function HomeScreen() {
       <View style={styles.rankNumber}>
         <Text style={styles.rankText}>#{index + 1}</Text>
       </View>
+      <GameImage 
+        gameName={item.game_name || item.name}
+        style={styles.gameImage}
+        resizeMode="cover"
+      />
       <View style={styles.gameInfo}>
         <Text style={styles.gameName}>{item.game_name || item.name}</Text>
         <Text style={styles.gameGenre}>{item.genre || 'Unknown Genre'}</Text>
       </View>
       <View style={styles.ratingBadge}>
-        <Text style={styles.ratingText}>{parseFloat(item.rating).toFixed(1)}</Text>
+        <Text style={styles.ratingText}>{Math.max(0, Math.min(10, parseFloat(item.rating || 0))).toFixed(1)}</Text>
       </View>
     </TouchableOpacity>
   );
@@ -178,6 +185,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 15,
+  },
+  gameImage: {
+    width: 60,
+    height: 80,
+    borderRadius: 8,
+    marginRight: 15,
+    backgroundColor: '#1a1a2e',
   },
   rankText: {
     color: '#fff',

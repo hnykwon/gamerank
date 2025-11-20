@@ -11,6 +11,8 @@ import RankScreen from './src/screens/RankScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import DiscoverScreen from './src/screens/DiscoverScreen';
 import GameDetailScreen from './src/screens/GameDetailScreen';
+import SocialFeedScreen from './src/screens/SocialFeedScreen';
+import LeaderboardScreen from './src/screens/LeaderboardScreen';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -32,19 +34,24 @@ function MainTabs() {
       }}
     >
       <Tab.Screen 
-        name="Home" 
-        component={HomeScreen}
-        options={{ title: 'My Rankings' }}
+        name="SocialFeed" 
+        component={SocialFeedScreen}
+        options={{ title: 'Social Feed' }}
       />
       <Tab.Screen 
-        name="Rank" 
-        component={RankScreen}
-        options={{ title: 'Rank Games' }}
+        name="Home" 
+        component={HomeScreen}
+        options={{ title: 'Your Lists' }}
       />
       <Tab.Screen 
         name="Discover" 
         component={DiscoverScreen}
         options={{ title: 'Discover' }}
+      />
+      <Tab.Screen 
+        name="Leaderboard" 
+        component={LeaderboardScreen}
+        options={{ title: 'Leaderboard' }}
       />
       <Tab.Screen 
         name="Profile" 
@@ -115,6 +122,16 @@ export default function App() {
                 headerShown: true,
                 headerStyle: { backgroundColor: '#1a1a2e' },
                 headerTintColor: '#fff',
+              }}
+            />
+            <Stack.Screen 
+              name="Rank" 
+              component={RankScreen}
+              options={{
+                headerShown: true,
+                headerStyle: { backgroundColor: '#1a1a2e' },
+                headerTintColor: '#fff',
+                title: 'Rank a New Game',
               }}
             />
           </>

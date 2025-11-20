@@ -106,7 +106,7 @@ export default function ProfileScreen() {
 
     const shareText = `My Top ${rankings.length} Video Games:\n\n` +
       rankings.map((game, index) => 
-        `${index + 1}. ${game.name}${game.rating ? ` (${game.rating}/10)` : ''}`
+        `${index + 1}. ${game.name}${game.rating ? ` (${Math.max(0, Math.min(10, parseFloat(game.rating))).toFixed(1)})` : ''}`
       ).join('\n') +
       `\n\nRanked on GameRank 🎮`;
 
@@ -165,7 +165,7 @@ export default function ProfileScreen() {
           <View style={styles.statBox}>
             <Text style={styles.statNumber}>
               {rankings.length > 0
-                ? (rankings.reduce((sum, g) => sum + parseFloat(g.rating || 0), 0) /
+                ? (rankings.reduce((sum, g) => sum + Math.max(0, Math.min(10, parseFloat(g.rating || 0))), 0) /
                     rankings.length).toFixed(1)
                 : '0'}
             </Text>
@@ -201,7 +201,7 @@ export default function ProfileScreen() {
                 <Text style={styles.topGameGenre}>{game.genre}</Text>
               </View>
               {game.rating && (
-                <Text style={styles.topGameRating}>{game.rating}/10</Text>
+                <Text style={styles.topGameRating}>{Math.max(0, Math.min(10, parseFloat(game.rating))).toFixed(1)}</Text>
               )}
             </View>
           ))}
