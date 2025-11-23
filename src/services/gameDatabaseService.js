@@ -2,8 +2,12 @@
 // Fetches games dynamically from RAWG.io instead of using a static list
 
 import { gameList as fallbackGameList } from '../data/gameList';
+import { trackAPIResponse, initUsageTracker } from './rawgUsageTracker';
 
 const RAWG_API_KEY = 'd2b865c2d8ea46bda24975b72b12fb90';
+
+// Initialize usage tracker
+initUsageTracker();
 
 // Cache for game lists
 const gameListCache = new Map();
@@ -31,6 +35,9 @@ export const fetchPopularGames = async (pageSize = 100, ordering = '-rating') =>
     if (!response.ok) {
       throw new Error(`API request failed with status ${response.status}`);
     }
+
+    // Track API usage (after checking response is ok)
+    await trackAPIResponse(response);
 
     const data = await response.json();
     
@@ -85,6 +92,9 @@ export const searchGamesOnRAWG = async (query, pageSize = 20) => {
     if (!response.ok) {
       throw new Error(`API request failed with status ${response.status}`);
     }
+    
+    // Track API usage (after checking response is ok)
+    await trackAPIResponse(response);
 
     const data = await response.json();
     
@@ -171,6 +181,9 @@ export const fetchGamesByGenre = async (genre, pageSize = 50) => {
       throw new Error('Failed to fetch genres');
     }
     
+    // Track API usage (after checking response is ok)
+    await trackAPIResponse(genresResponse);
+    
     const genresData = await genresResponse.json();
     const genreObj = genresData.results?.find(g => 
       g.name.toLowerCase() === genre.toLowerCase() || 
@@ -187,6 +200,9 @@ export const fetchGamesByGenre = async (genre, pageSize = 50) => {
     if (!response.ok) {
       throw new Error(`API request failed with status ${response.status}`);
     }
+    
+    // Track API usage (after checking response is ok)
+    await trackAPIResponse(response);
 
     const data = await response.json();
     

@@ -9,6 +9,9 @@ import {
   ActivityIndicator,
   Modal,
   Alert,
+  TouchableWithoutFeedback,
+  Keyboard,
+  ScrollView,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../config/supabase';
@@ -30,12 +33,14 @@ export default function DiscoverScreen() {
   const [currentComparisonIndex, setCurrentComparisonIndex] = useState(0);
   const [comparisonHistory, setComparisonHistory] = useState([]);
   const [gamesToCompare, setGamesToCompare] = useState([]);
+  const [notes, setNotes] = useState('');
+  const [notesModal, setNotesModal] = useState(false);
   
   // Filter states
   const [selectedGenre, setSelectedGenre] = useState('All');
   const [minRating, setMinRating] = useState(0);
   const [sortBy, setSortBy] = useState('name'); // 'name', 'rating', 'genre'
-  const [showFilters, setShowFilters] = useState(false);
+  const [openDropdown, setOpenDropdown] = useState(null); // 'genre', 'rating', 'sort', or null
   
   const navigation = useNavigation();
 
@@ -181,7 +186,8 @@ export default function DiscoverScreen() {
         name: selectedGame.name, 
         genre: selectedGame.genre, 
         rating: middleScore.toFixed(2),
-        starRating: stars 
+        starRating: stars,
+        notes: notes.trim() || null,
       });
     }
   };
@@ -203,6 +209,7 @@ export default function DiscoverScreen() {
         genre: game.genre || 'Unknown',
         rating: rating.toFixed(2),
         starRating: game.starRating || 0,
+        notes: game.notes || null,
       });
 
       if (error) {
@@ -222,6 +229,7 @@ export default function DiscoverScreen() {
       // Reset state
       setSelectedGame(null);
       setSelectedStarRating(0);
+      setNotes('');
       
       Alert.alert('Success', 'Game ranked successfully!');
     } catch (error) {
@@ -296,6 +304,7 @@ export default function DiscoverScreen() {
     setComparisonModal(false);
     setSelectedGame(null);
     setSelectedStarRating(0);
+    setNotes('');
     setCurrentComparisonIndex(0);
     setComparisonHistory([]);
     setGamesToCompare([]);
@@ -337,6 +346,7 @@ export default function DiscoverScreen() {
         genre: selectedGame.genre || 'Unknown',
         rating: clampedRating.toFixed(2),
         starRating: selectedStarRating,
+        notes: notes.trim() || null,
       });
 
       if (error) {
@@ -356,6 +366,7 @@ export default function DiscoverScreen() {
       setStarRatingModal(false);
       setSelectedGame(null);
       setSelectedStarRating(0);
+      setNotes('');
       setCurrentComparisonIndex(0);
       setComparisonHistory([]);
       setGamesToCompare([]);
@@ -473,30 +484,60 @@ export default function DiscoverScreen() {
           value={searchQuery}
           onChangeText={setSearchQuery}
         />
+      </View>
+
+      {/* Filter Buttons Row */}
+      <View style={styles.filterButtonsRow}>
         <TouchableOpacity
-          style={styles.filterButton}
-          onPress={() => setShowFilters(!showFilters)}
+          style={[styles.filterChip, selectedGenre !== 'All' && styles.filterChipActive]}
+          onPress={() => setOpenDropdown(openDropdown === 'genre' ? null : 'genre')}
         >
-          <Text style={styles.filterButtonText}>
-            {showFilters ? 'Hide Filters' : 'Filters'}
+          <Text style={[styles.filterChipText, selectedGenre !== 'All' && styles.filterChipTextActive]}>
+            Genre: {selectedGenre}
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.filterChip, minRating > 0 && styles.filterChipActive]}
+          onPress={() => setOpenDropdown(openDropdown === 'rating' ? null : 'rating')}
+        >
+          <Text style={[styles.filterChipText, minRating > 0 && styles.filterChipTextActive]}>
+            Rating: {minRating === 0 ? 'All' : `${minRating}+`}
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.filterChip, styles.filterChipActive]}
+          onPress={() => setOpenDropdown(openDropdown === 'sort' ? null : 'sort')}
+        >
+          <Text style={styles.filterChipTextActive}>
+            Sort: {sortBy === 'name' ? 'Name' : sortBy === 'rating' ? 'Rating' : 'Genre'}
           </Text>
         </TouchableOpacity>
       </View>
 
-      {showFilters && (
-        <View style={styles.filtersContainer}>
-          {/* Genre Filter */}
-          <View style={styles.filterSection}>
-            <Text style={styles.filterLabel}>Genre</Text>
+      {/* Genre Dropdown Bubble */}
+      {openDropdown === 'genre' && (
+        <View style={styles.dropdownBubble}>
+          <View style={styles.dropdownHeader}>
+            <Text style={styles.dropdownTitle}>Select Genre</Text>
+            <TouchableOpacity onPress={() => setOpenDropdown(null)}>
+              <Text style={styles.dropdownClose}>×</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={styles.genreScrollView} nestedScrollEnabled={true}>
             <View style={styles.genreButtons}>
-              {availableGenres.slice(0, 8).map((genre) => (
+              {availableGenres.map((genre) => (
                 <TouchableOpacity
                   key={genre}
                   style={[
                     styles.genreButton,
                     selectedGenre === genre && styles.genreButtonActive,
                   ]}
-                  onPress={() => setSelectedGenre(genre)}
+                  onPress={() => {
+                    setSelectedGenre(genre);
+                    setOpenDropdown(null);
+                  }}
                 >
                   <Text
                     style={[
@@ -509,80 +550,83 @@ export default function DiscoverScreen() {
                 </TouchableOpacity>
               ))}
             </View>
-            {availableGenres.length > 8 && (
-              <Text style={styles.moreGenresText}>
-                +{availableGenres.length - 8} more genres
-              </Text>
-            )}
-          </View>
+          </ScrollView>
+        </View>
+      )}
 
-          {/* Rating Filter */}
-          <View style={styles.filterSection}>
-            <Text style={styles.filterLabel}>Min Average Rating</Text>
-            <View style={styles.ratingButtons}>
-              {[0, 2, 4, 6, 8].map((rating) => (
-                <TouchableOpacity
-                  key={rating}
+      {/* Rating Dropdown Bubble */}
+      {openDropdown === 'rating' && (
+        <View style={styles.dropdownBubble}>
+          <View style={styles.dropdownHeader}>
+            <Text style={styles.dropdownTitle}>Min Average Rating</Text>
+            <TouchableOpacity onPress={() => setOpenDropdown(null)}>
+              <Text style={styles.dropdownClose}>×</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.ratingButtons}>
+            {[0, 2, 4, 6, 8].map((rating) => (
+              <TouchableOpacity
+                key={rating}
+                style={[
+                  styles.ratingButton,
+                  minRating === rating && styles.ratingButtonActive,
+                ]}
+                onPress={() => {
+                  setMinRating(rating);
+                  setOpenDropdown(null);
+                }}
+              >
+                <Text
                   style={[
-                    styles.ratingButton,
-                    minRating === rating && styles.ratingButtonActive,
+                    styles.ratingButtonText,
+                    minRating === rating && styles.ratingButtonTextActive,
                   ]}
-                  onPress={() => setMinRating(rating)}
                 >
-                  <Text
-                    style={[
-                      styles.ratingButtonText,
-                      minRating === rating && styles.ratingButtonTextActive,
-                    ]}
-                  >
-                    {rating === 0 ? 'All' : `${rating}+`}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+                  {rating === 0 ? 'All Ratings' : `${rating}+`}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
+        </View>
+      )}
 
-          {/* Sort By */}
-          <View style={styles.filterSection}>
-            <Text style={styles.filterLabel}>Sort By</Text>
-            <View style={styles.sortButtons}>
-              {[
-                { value: 'name', label: 'Name' },
-                { value: 'rating', label: 'Avg Rating' },
-                { value: 'genre', label: 'Genre' },
-              ].map((option) => (
-                <TouchableOpacity
-                  key={option.value}
+      {/* Sort Dropdown Bubble */}
+      {openDropdown === 'sort' && (
+        <View style={styles.dropdownBubble}>
+          <View style={styles.dropdownHeader}>
+            <Text style={styles.dropdownTitle}>Sort By</Text>
+            <TouchableOpacity onPress={() => setOpenDropdown(null)}>
+              <Text style={styles.dropdownClose}>×</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.sortButtons}>
+            {[
+              { value: 'name', label: 'Name' },
+              { value: 'rating', label: 'Average Rating' },
+              { value: 'genre', label: 'Genre' },
+            ].map((option) => (
+              <TouchableOpacity
+                key={option.value}
+                style={[
+                  styles.sortButton,
+                  sortBy === option.value && styles.sortButtonActive,
+                ]}
+                onPress={() => {
+                  setSortBy(option.value);
+                  setOpenDropdown(null);
+                }}
+              >
+                <Text
                   style={[
-                    styles.sortButton,
-                    sortBy === option.value && styles.sortButtonActive,
+                    styles.sortButtonText,
+                    sortBy === option.value && styles.sortButtonTextActive,
                   ]}
-                  onPress={() => setSortBy(option.value)}
                 >
-                  <Text
-                    style={[
-                      styles.sortButtonText,
-                      sortBy === option.value && styles.sortButtonTextActive,
-                    ]}
-                  >
-                    {option.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+                  {option.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
-
-          {/* Clear Filters */}
-          <TouchableOpacity
-            style={styles.clearFiltersButton}
-            onPress={() => {
-              setSelectedGenre('All');
-              setMinRating(0);
-              setSortBy('name');
-            }}
-          >
-            <Text style={styles.clearFiltersText}>Clear All Filters</Text>
-          </TouchableOpacity>
         </View>
       )}
 
@@ -625,39 +669,106 @@ export default function DiscoverScreen() {
               How many stars would you give this game?
             </Text>
 
-            <View style={styles.starContainer}>
-              {[1, 2, 3, 4, 5].map((stars) => (
+            <View style={styles.horizontalStarContainer}>
+              {[1, 2, 3, 4, 5].map((star) => (
                 <TouchableOpacity
-                  key={stars}
-                  style={styles.starButton}
-                  onPress={() => handleStarRatingSelect(stars)}
+                  key={star}
+                  onPress={() => {
+                    setSelectedStarRating(star);
+                  }}
+                  style={styles.horizontalStarButton}
                 >
-                  <View style={styles.starRow}>
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <Text
-                        key={star}
-                        style={[
-                          styles.star,
-                          star <= stars && styles.starFilled,
-                        ]}
-                      >
-                        ★
-                      </Text>
-                    ))}
-                  </View>
-                  <Text style={styles.starLabel}>{stars} {stars === 1 ? 'Star' : 'Stars'}</Text>
+                  <Text
+                    style={[
+                      styles.horizontalStar,
+                      star <= selectedStarRating && styles.horizontalStarFilled,
+                    ]}
+                  >
+                    ★
+                  </Text>
                 </TouchableOpacity>
               ))}
             </View>
 
+            <View style={styles.starRatingActions}>
+              <TouchableOpacity
+                style={styles.notesButton}
+                onPress={() => setNotesModal(true)}
+              >
+                <Text style={styles.notesButtonText}>📝 Notes</Text>
+              </TouchableOpacity>
+              
+              <View style={styles.starRatingButtons}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.cancelButton, { flex: 1, marginRight: 5 }]}
+                  onPress={() => {
+                    setStarRatingModal(false);
+                    setSelectedGame(null);
+                    setSelectedStarRating(0);
+                    setNotes('');
+                  }}
+                >
+                  <Text style={styles.modalButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={[styles.modalButton, { flex: 1, marginLeft: 5 }]}
+                  onPress={() => {
+                    if (selectedStarRating === 0) {
+                      Alert.alert('Error', 'Please select a star rating');
+                      return;
+                    }
+                    handleStarRatingSelect(selectedStarRating);
+                  }}
+                  disabled={selectedStarRating === 0}
+                >
+                  <Text style={[styles.modalButtonText, selectedStarRating === 0 && styles.disabledButtonText]}>
+                    Continue
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Notes Modal */}
+      <Modal
+        visible={notesModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setNotesModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalTitleContainer}>
+              <Text style={styles.modalTitle}>Add Notes</Text>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={() => setNotesModal(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Text style={styles.closeButtonText}>×</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.modalSubtitle}>
+              {selectedGame?.name}
+            </Text>
+            <TextInput
+              style={styles.notesInput}
+              placeholder="Add your thoughts about this game..."
+              placeholderTextColor="#95a5a6"
+              value={notes}
+              onChangeText={setNotes}
+              multiline
+              numberOfLines={8}
+              textAlignVertical="top"
+            />
             <TouchableOpacity
-              style={[styles.modalButton, styles.cancelButton]}
-              onPress={() => {
-                setStarRatingModal(false);
-                setSelectedGame(null);
-              }}
+              style={styles.modalButton}
+              onPress={() => setNotesModal(false)}
             >
-              <Text style={styles.modalButtonText}>Cancel</Text>
+              <Text style={styles.modalButtonText}>Save Notes</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -793,13 +904,10 @@ const styles = StyleSheet.create({
     color: '#b2bec3',
   },
   searchContainer: {
-    flexDirection: 'row',
     padding: 15,
     backgroundColor: '#16213e',
-    gap: 10,
   },
   searchInput: {
-    flex: 1,
     backgroundColor: '#2d3436',
     borderRadius: 10,
     padding: 15,
@@ -808,33 +916,68 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#636e72',
   },
-  filterButton: {
-    backgroundColor: '#6c5ce7',
-    borderRadius: 10,
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    justifyContent: 'center',
-    alignItems: 'center',
+  filterButtonsRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 15,
+    paddingBottom: 10,
+    backgroundColor: '#16213e',
+    gap: 8,
+    flexWrap: 'wrap',
   },
-  filterButtonText: {
-    color: '#fff',
+  filterChip: {
+    backgroundColor: '#2d3436',
+    borderRadius: 20,
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: '#636e72',
+  },
+  filterChipActive: {
+    backgroundColor: '#6c5ce7',
+    borderColor: '#6c5ce7',
+  },
+  filterChipText: {
+    color: '#b2bec3',
     fontSize: 14,
+    fontWeight: '600',
+  },
+  filterChipTextActive: {
+    color: '#fff',
     fontWeight: 'bold',
   },
-  filtersContainer: {
-    backgroundColor: '#16213e',
+  dropdownBubble: {
+    backgroundColor: '#2d3436',
+    marginHorizontal: 15,
+    marginBottom: 10,
+    borderRadius: 12,
     padding: 15,
-    borderTopWidth: 1,
-    borderTopColor: '#2d3436',
+    borderWidth: 1,
+    borderColor: '#636e72',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
-  filterSection: {
-    marginBottom: 20,
+  dropdownHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
   },
-  filterLabel: {
+  dropdownTitle: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 10,
+    fontWeight: 'bold',
+  },
+  dropdownClose: {
+    color: '#95a5a6',
+    fontSize: 24,
+    fontWeight: 'bold',
+    lineHeight: 24,
+  },
+  genreScrollView: {
+    maxHeight: 200,
   },
   genreButtons: {
     flexDirection: 'row',
@@ -869,6 +1012,7 @@ const styles = StyleSheet.create({
   },
   ratingButtons: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
   },
   ratingButton: {
@@ -895,7 +1039,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   sortButtons: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     gap: 8,
   },
   sortButton: {
@@ -918,19 +1062,6 @@ const styles = StyleSheet.create({
   sortButtonTextActive: {
     color: '#fff',
     fontWeight: 'bold',
-  },
-  clearFiltersButton: {
-    backgroundColor: 'transparent',
-    borderRadius: 8,
-    padding: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#636e72',
-    marginTop: 10,
-  },
-  clearFiltersText: {
-    color: '#95a5a6',
-    fontSize: 14,
   },
   avgRatingText: {
     color: '#74b9ff',
@@ -1098,6 +1229,57 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',
+  },
+  horizontalStarContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginVertical: 30,
+    gap: 15,
+  },
+  horizontalStarButton: {
+    padding: 5,
+  },
+  horizontalStar: {
+    fontSize: 48,
+    color: '#636e72',
+  },
+  horizontalStarFilled: {
+    color: '#fdcb6e',
+  },
+  starRatingActions: {
+    marginTop: 20,
+  },
+  starRatingButtons: {
+    flexDirection: 'row',
+    marginTop: 10,
+  },
+  notesButton: {
+    backgroundColor: '#74b9ff',
+    borderRadius: 10,
+    padding: 15,
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  notesButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  notesInput: {
+    backgroundColor: '#1a1a2e',
+    borderRadius: 10,
+    padding: 15,
+    color: '#fff',
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: '#636e72',
+    minHeight: 150,
+    marginBottom: 20,
+    textAlignVertical: 'top',
+  },
+  disabledButtonText: {
+    opacity: 0.5,
   },
   modalButton: {
     backgroundColor: '#6c5ce7',

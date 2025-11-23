@@ -5,6 +5,11 @@
 // Sign up at https://rawg.io/apidocs to get a free API key
 const RAWG_API_KEY = 'd2b865c2d8ea46bda24975b72b12fb90'; // Replace with your actual API key
 
+import { trackAPIResponse, initUsageTracker } from './rawgUsageTracker';
+
+// Initialize usage tracker
+initUsageTracker();
+
 // Cache to avoid repeated API calls
 const imageCache = new Map();
 
@@ -62,6 +67,9 @@ export const fetchGameImageUrl = async (gameName) => {
     if (!response.ok) {
       throw new Error(`API request failed with status ${response.status}`);
     }
+    
+    // Track API usage (after checking response is ok)
+    await trackAPIResponse(response);
 
     let data = await response.json();
     
@@ -101,6 +109,8 @@ export const fetchGameImageUrl = async (gameName) => {
       response = await fetch(searchUrl);
       
       if (response.ok) {
+        // Track API usage (after checking response is ok)
+        await trackAPIResponse(response);
         data = await response.json();
         if (data.results && data.results.length > 0) {
           const game = data.results[0];

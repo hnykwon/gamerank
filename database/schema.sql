@@ -28,15 +28,28 @@ CREATE TABLE IF NOT EXISTS game_rankings (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
+-- Create follows table for follower/following relationships
+CREATE TABLE IF NOT EXISTS follows (
+  id BIGSERIAL PRIMARY KEY,
+  follower_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  following_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+  UNIQUE(follower_id, following_id),
+  CHECK (follower_id != following_id)
+);
+
 -- Create indexes for better query performance
 CREATE INDEX IF NOT EXISTS idx_game_rankings_user_id ON game_rankings(user_id);
 CREATE INDEX IF NOT EXISTS idx_game_rankings_rating ON game_rankings(rating DESC);
 CREATE INDEX IF NOT EXISTS idx_game_rankings_star_rating ON game_rankings(star_rating);
 CREATE INDEX IF NOT EXISTS idx_game_rankings_is_public ON game_rankings(is_public) WHERE is_public = true;
+CREATE INDEX IF NOT EXISTS idx_follows_follower_id ON follows(follower_id);
+CREATE INDEX IF NOT EXISTS idx_follows_following_id ON follows(following_id);
 
 -- Enable Row Level Security (RLS)
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE game_rankings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE follows ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies for profiles
 -- Users can read their own profile
@@ -79,6 +92,33 @@ CREATE POLICY "Users can update own rankings"
 CREATE POLICY "Users can delete own rankings"
   ON game_rankings FOR DELETE
   USING (auth.uid() = user_id);
+
+-- Users can view rankings from users they follow
+CREATE POLICY "Users can view followed users' rankings"
+  ON game_rankings FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM follows
+      WHERE follows.follower_id = auth.uid()
+      AND follows.following_id = game_rankings.user_id
+    )
+  );
+
+-- RLS Policies for follows
+-- Users can view their own follows (both following and followers)
+CREATE POLICY "Users can view own follows"
+  ON follows FOR SELECT
+  USING (auth.uid() = follower_id OR auth.uid() = following_id);
+
+-- Users can follow other users
+CREATE POLICY "Users can follow others"
+  ON follows FOR INSERT
+  WITH CHECK (auth.uid() = follower_id);
+
+-- Users can unfollow (delete their own follows)
+CREATE POLICY "Users can unfollow"
+  ON follows FOR DELETE
+  USING (auth.uid() = follower_id);
 
 -- Function to automatically create profile on user signup
 CREATE OR REPLACE FUNCTION public.handle_new_user()

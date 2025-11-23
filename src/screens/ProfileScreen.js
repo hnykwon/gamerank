@@ -11,6 +11,7 @@ import * as Sharing from 'expo-sharing';
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../config/supabase';
 import { rankingsService, profileService } from '../services/supabaseService';
+import APIUsageDisplay from '../components/APIUsageDisplay';
 
 export default function ProfileScreen() {
   const [userData, setUserData] = useState(null);
@@ -208,6 +209,10 @@ export default function ProfileScreen() {
           {rankings.length === 0 && (
             <Text style={styles.emptyText}>No games ranked yet</Text>
           )}
+        </View>
+
+        <View style={styles.section}>
+          <APIUsageDisplay />
         </View>
 
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>

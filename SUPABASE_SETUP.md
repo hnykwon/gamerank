@@ -161,7 +161,20 @@ CREATE TRIGGER update_game_rankings_updated_at
   EXECUTE FUNCTION public.handle_updated_at();
 ```
 
-## Step 5: Test the Connection
+## Step 5: Add Follows Table (For Social Feed Feature)
+
+If you want to use the social feed feature with follower/following functionality:
+
+1. In Supabase dashboard, go to **SQL Editor**
+2. Click "New query"
+3. Copy and paste the SQL from `database/migration_follows.sql`
+4. Click "Run" to execute the SQL
+
+This will create the `follows` table and necessary policies for the social feed feature.
+
+**Note**: If you're setting up for the first time, the `database/schema.sql` file already includes the follows table, so you can skip this step if you ran the full schema.
+
+## Step 6: Test the Connection
 
 1. Start your app: `npm start`
 2. Try signing up with a new account
@@ -178,8 +191,9 @@ CREATE TRIGGER update_game_rankings_updated_at
 - Make sure you ran all the SQL policies in Step 4
 - Check that RLS is enabled on both tables
 
-### "relation does not exist"
-- Make sure you ran the schema SQL in Step 4
+### "relation does not exist" or "Could not find the table 'public.follows'"
+- Make sure you ran the schema SQL in Step 4 (or the migration in Step 5)
+- If you see an error about the `follows` table, run `database/migration_follows.sql` in the SQL Editor
 - Check the Supabase SQL Editor for any errors
 
 ### Authentication not working
