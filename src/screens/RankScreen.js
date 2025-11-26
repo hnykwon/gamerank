@@ -67,6 +67,7 @@ export default function RankScreen() {
     ranking.startRanking({
       name: game.name,
       genre: game.genre,
+      price: game.price || null,
     });
   };
 
@@ -95,7 +96,7 @@ export default function RankScreen() {
               <TextInput
                 style={styles.input}
                 placeholder="Search games... (e.g., Zelda, Witcher, Elden Ring)"
-                placeholderTextColor="#95a5a6"
+                placeholderTextColor="#666"
                 value={searchQuery}
                 onChangeText={setSearchQuery}
                 autoCapitalize="none"
@@ -159,7 +160,7 @@ export default function RankScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#000',
   },
   content: {
     padding: 20,
@@ -168,12 +169,14 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#fff',
+    fontFamily: 'Raleway',
+    color: '#000',
     marginBottom: 10,
   },
   subtitle: {
     fontSize: 16,
-    color: '#b2bec3',
+    fontFamily: 'Raleway',
+    color: '#666',
     marginBottom: 30,
   },
   form: {
@@ -181,19 +184,22 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 16,
-    color: '#fff',
+    fontFamily: 'Raleway',
+    color: '#000',
     marginBottom: 8,
     marginTop: 15,
     fontWeight: '600',
+    fontFamily: 'Raleway',
   },
   input: {
-    backgroundColor: '#2d3436',
+    backgroundColor: '#000',
     borderRadius: 10,
     padding: 15,
-    color: '#fff',
+    color: '#000',
     fontSize: 16,
+    fontFamily: 'Raleway',
     borderWidth: 1,
-    borderColor: '#636e72',
+    borderColor: '#ddd',
   },
   searchContainer: {
     position: 'relative',
@@ -204,12 +210,12 @@ const styles = StyleSheet.create({
     top: '100%',
     left: 0,
     right: 0,
-    backgroundColor: '#2d3436',
+    backgroundColor: '#000',
     borderRadius: 10,
     marginTop: 5,
     maxHeight: 400,
     borderWidth: 1,
-    borderColor: '#636e72',
+    borderColor: '#ddd',
     zIndex: 1000,
     elevation: 5,
     shadowColor: '#000',
@@ -222,7 +228,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     padding: 15,
     borderBottomWidth: 1,
-    borderBottomColor: '#1a1a2e',
+    borderBottomColor: '#000',
     alignItems: 'center',
   },
   searchResultImage: {
@@ -230,24 +236,27 @@ const styles = StyleSheet.create({
     height: 70,
     borderRadius: 8,
     marginRight: 15,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#000',
   },
   searchResultTextContainer: {
     flex: 1,
   },
   searchResultName: {
-    color: '#fff',
+    color: '#000',
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: 'Raleway',
     marginBottom: 4,
   },
   searchResultGenre: {
-    color: '#74b9ff',
+    color: '#001f3f',
     fontSize: 14,
+    fontFamily: 'Raleway',
   },
   noResultsText: {
-    color: '#95a5a6',
+    color: '#666',
     fontSize: 14,
+    fontFamily: 'Raleway',
     padding: 15,
     textAlign: 'center',
   },

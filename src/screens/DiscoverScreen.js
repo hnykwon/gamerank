@@ -7,18 +7,21 @@ import {
   StyleSheet,
   TextInput,
   ActivityIndicator,
-  Modal,
   Alert,
   TouchableWithoutFeedback,
   Keyboard,
   ScrollView,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../config/supabase';
-import { rankingsService } from '../services/supabaseService';
+import { rankingsService, gamesService } from '../services/supabaseService';
 import { getAllGames } from '../services/gameDatabaseService';
 import { gameList as fallbackGameList } from '../data/gameList';
 import GameImage from '../components/GameImage';
+import AppHeader from '../components/AppHeader';
+import { useGameRanking } from '../hooks/useGameRanking';
+import GameRankingModals from '../components/GameRankingModals';
 
 export default function DiscoverScreen() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -26,21 +29,19 @@ export default function DiscoverScreen() {
   const [myRankings, setMyRankings] = useState([]);
   const [averageRatings, setAverageRatings] = useState({});
   const [loading, setLoading] = useState(true);
-  const [starRatingModal, setStarRatingModal] = useState(false);
-  const [comparisonModal, setComparisonModal] = useState(false);
-  const [selectedGame, setSelectedGame] = useState(null);
-  const [selectedStarRating, setSelectedStarRating] = useState(0);
-  const [currentComparisonIndex, setCurrentComparisonIndex] = useState(0);
-  const [comparisonHistory, setComparisonHistory] = useState([]);
-  const [gamesToCompare, setGamesToCompare] = useState([]);
-  const [notes, setNotes] = useState('');
-  const [notesModal, setNotesModal] = useState(false);
+  
+  const ranking = useGameRanking(async () => {
+    await loadMyRankings();
+    await loadAllGames();
+  });
   
   // Filter states
   const [selectedGenre, setSelectedGenre] = useState('All');
-  const [minRating, setMinRating] = useState(0);
+  const [starFilter, setStarFilter] = useState(0); // 0 = All, 1-5 = star ranges
+  const [rankedFilter, setRankedFilter] = useState('unranked'); // 'all', 'ranked', 'unranked'
+  const [priceFilter, setPriceFilter] = useState(0); // 0 = All, 1 = $, 2 = $$, 3 = $$$, 4 = $$$$
   const [sortBy, setSortBy] = useState('name'); // 'name', 'rating', 'genre'
-  const [openDropdown, setOpenDropdown] = useState(null); // 'genre', 'rating', 'sort', or null
+  const [openDropdown, setOpenDropdown] = useState(null); // 'genre', 'rating', 'ranked', 'price', 'sort', or null
   
   const navigation = useNavigation();
 
@@ -78,8 +79,41 @@ export default function DiscoverScreen() {
 
   const loadAllGames = async () => {
     try {
-      // Fetch games from RAWG.io API
+      // Try to fetch games from database first
+      const { data: dbGames, error: dbError } = await gamesService.getAllGames();
+      
+      if (dbGames && dbGames.length > 0 && !dbError) {
+        // Use games from database (includes all metadata: name, genre, image, price)
+        console.log(`✅ Loaded ${dbGames.length} games from database`);
+        const gamesWithIds = dbGames.map((game, index) => ({
+          id: game.id || game.rawg_id || `db-game-${index}`,
+          name: game.name,
+          genre: game.genre || 'Unknown',
+          imageUrl: game.image_url || null,
+          price: game.price || null,
+        }));
+        
+        setAllGames(gamesWithIds);
+        return;
+      }
+      
+      // Fallback: If database is empty or error, fetch from RAWG API
+      console.log('⚠️  Database empty or error, fetching from RAWG API...');
       const games = await getAllGames();
+      
+      // Get game names to fetch from database (for prices)
+      const gameNames = games.map(g => g.name);
+      
+      // Fetch prices from database
+      const { data: priceGames, error: priceError } = await gamesService.getGamesByNames(gameNames);
+      
+      // Create a map of game names to prices from database
+      const priceMap = {};
+      if (priceGames && !priceError) {
+        priceGames.forEach(dbGame => {
+          priceMap[dbGame.name] = dbGame.price;
+        });
+      }
       
       // Add unique IDs for FlatList and ensure proper format
       const gamesWithIds = games.map((game, index) => ({
@@ -87,17 +121,34 @@ export default function DiscoverScreen() {
         name: game.name,
         genre: game.genre || 'Unknown',
         imageUrl: game.imageUrl || null,
+        price: priceMap[game.name] || null, // Price from database, or null if not found
       }));
       
       setAllGames(gamesWithIds);
     } catch (error) {
       console.error('Error loading games:', error);
-      // Fallback to local list
+      // Final fallback to local list
+      const gameNames = fallbackGameList.map(g => g.name);
+      
+      // Try to fetch prices from database for fallback games
+      let priceMap = {};
+      try {
+        const { data: dbGames } = await gamesService.getGamesByNames(gameNames);
+        if (dbGames) {
+          dbGames.forEach(dbGame => {
+            priceMap[dbGame.name] = dbGame.price;
+          });
+        }
+      } catch (dbError) {
+        console.warn('Error fetching prices from database:', dbError);
+      }
+      
       const gamesWithIds = fallbackGameList.map((game, index) => ({
         id: `game-${index}`,
         name: game.name,
         genre: game.genre,
         imageUrl: game.imageUrl || null,
+        price: priceMap[game.name] || null,
       }));
       setAllGames(gamesWithIds);
     }
@@ -150,237 +201,24 @@ export default function DiscoverScreen() {
     );
   };
 
+  const getPriceCategory = (price) => {
+    if (!price || price === null || price === undefined) return null;
+    const numPrice = parseFloat(price);
+    if (isNaN(numPrice)) return null;
+    if (numPrice < 20) return 1; // $
+    if (numPrice < 40) return 2; // $$
+    if (numPrice < 60) return 3; // $$$
+    return 4; // $$$$
+  };
+
   const handleAddGame = (game) => {
-    // Show star rating modal immediately
-    setSelectedGame({
+    ranking.startRanking({
       name: game.name,
       genre: game.genre || 'Unknown',
+      price: game.price || null,
     });
-    setStarRatingModal(true);
   };
 
-  const handleStarRatingSelect = (stars) => {
-    setSelectedStarRating(stars);
-    setStarRatingModal(false);
-    
-    // Get games with the same star rating, sorted by rating
-    const gamesInSameCategory = myRankings
-      .filter(game => {
-        const gameStars = Math.floor(parseFloat(game.rating) / 2);
-        return gameStars === stars;
-      })
-      .sort((a, b) => parseFloat(b.rating) - parseFloat(a.rating));
-
-    if (gamesInSameCategory.length > 0) {
-      // Set up comparison state
-      setGamesToCompare(gamesInSameCategory);
-      setCurrentComparisonIndex(0);
-      setComparisonHistory([]);
-      setComparisonModal(true);
-    } else {
-      // No games in this category, save directly with middle score
-      const minScore = (stars - 1) * 2;
-      const maxScore = stars * 2;
-      const middleScore = (minScore + maxScore) / 2;
-      saveGame({ 
-        name: selectedGame.name, 
-        genre: selectedGame.genre, 
-        rating: middleScore.toFixed(2),
-        starRating: stars,
-        notes: notes.trim() || null,
-      });
-    }
-  };
-
-  const saveGame = async (game) => {
-    try {
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-      
-      if (!user || authError) {
-        await supabase.auth.signOut();
-        return;
-      }
-
-      // Clamp rating between 0 and 10
-      const rating = Math.max(0, Math.min(10, parseFloat(game.rating || '0')));
-
-      const { data, error } = await rankingsService.addRanking(user.id, {
-        name: game.name,
-        genre: game.genre || 'Unknown',
-        rating: rating.toFixed(2),
-        starRating: game.starRating || 0,
-        notes: game.notes || null,
-      });
-
-      if (error) {
-        if (error.message?.includes('JWT') || error.message?.includes('auth') || error.code === 'PGRST301') {
-          await supabase.auth.signOut();
-          return;
-        }
-        Alert.alert('Error', error.message || 'Failed to save game');
-        console.error(error);
-        return;
-      }
-
-      // Reload rankings to update the list
-      await loadMyRankings();
-      await loadAllGames(); // Refresh to show updated ranked status
-      
-      // Reset state
-      setSelectedGame(null);
-      setSelectedStarRating(0);
-      setNotes('');
-      
-      Alert.alert('Success', 'Game ranked successfully!');
-    } catch (error) {
-      Alert.alert('Error', 'Failed to save game');
-      console.error(error);
-    }
-  };
-
-  const calculateRating = (position, totalGames, starRating) => {
-    // Each star category gets a 2-point range:
-    // 1 star: 0-2, 2 star: 2-4, 3 star: 4-6, 4 star: 6-8, 5 star: 8-10
-    const minScore = (starRating - 1) * 2; // Minimum for this star category
-    const maxScore = starRating * 2; // Maximum for this star category
-    const range = maxScore - minScore; // Always 2
-    
-    if (totalGames === 0) {
-      // If no games to compare, give it the middle of the range
-      return (minScore + maxScore) / 2;
-    }
-    
-    // Calculate position within the star category
-    // Position 0 (best) gets maxScore, position last gets minScore
-    // Ensure position is within valid range
-    const normalizedPosition = Math.max(0, Math.min(totalGames, position));
-    const score = maxScore - (normalizedPosition / totalGames) * range;
-    
-    // Clamp between 0 and 10 to ensure it never goes outside bounds
-    // Also ensure it stays within the star category bounds
-    const clampedScore = Math.max(minScore, Math.min(maxScore, score));
-    return Math.max(0, Math.min(10, clampedScore));
-  };
-
-  const handleGameChoice = (preferredGame) => {
-    const currentGame = gamesToCompare[currentComparisonIndex];
-    
-    const comparison = {
-      newGameBetter: preferredGame === 'new',
-      comparedGame: currentGame,
-      index: currentComparisonIndex,
-    };
-    
-    setComparisonHistory([...comparisonHistory, comparison]);
-    
-    if (currentComparisonIndex < gamesToCompare.length - 1) {
-      setCurrentComparisonIndex(currentComparisonIndex + 1);
-    } else {
-      finishComparison();
-    }
-  };
-
-  const handleUndo = () => {
-    if (comparisonHistory.length > 0) {
-      const newHistory = comparisonHistory.slice(0, -1);
-      setComparisonHistory(newHistory);
-      setCurrentComparisonIndex(Math.max(0, currentComparisonIndex - 1));
-    }
-  };
-
-  const handleTooTough = () => {
-    if (currentComparisonIndex < gamesToCompare.length - 1) {
-      setCurrentComparisonIndex(currentComparisonIndex + 1);
-    } else {
-      finishComparison();
-    }
-  };
-
-  const handleSkip = () => {
-    finishComparisonAtEnd();
-  };
-
-  const handleCancelComparison = () => {
-    setComparisonModal(false);
-    setSelectedGame(null);
-    setSelectedStarRating(0);
-    setNotes('');
-    setCurrentComparisonIndex(0);
-    setComparisonHistory([]);
-    setGamesToCompare([]);
-  };
-
-  const finishComparison = async () => {
-    let position = gamesToCompare.length;
-    
-    for (let i = 0; i < comparisonHistory.length; i++) {
-      if (comparisonHistory[i].newGameBetter) {
-        position = comparisonHistory[i].index;
-        break;
-      }
-    }
-
-    const numericalRating = calculateRating(position, gamesToCompare.length, selectedStarRating);
-    await saveComparisonResult(numericalRating);
-  };
-
-  const finishComparisonAtEnd = async () => {
-    const numericalRating = calculateRating(gamesToCompare.length, gamesToCompare.length, selectedStarRating);
-    await saveComparisonResult(numericalRating);
-  };
-
-  const saveComparisonResult = async (numericalRating) => {
-    try {
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-      
-      if (!user || authError) {
-        await supabase.auth.signOut();
-        return;
-      }
-
-      // Clamp rating between 0 and 10
-      const clampedRating = Math.max(0, Math.min(10, numericalRating));
-
-      const { data, error } = await rankingsService.addRanking(user.id, {
-        name: selectedGame.name,
-        genre: selectedGame.genre || 'Unknown',
-        rating: clampedRating.toFixed(2),
-        starRating: selectedStarRating,
-        notes: notes.trim() || null,
-      });
-
-      if (error) {
-        if (error.message?.includes('JWT') || error.message?.includes('auth') || error.code === 'PGRST301') {
-          await supabase.auth.signOut();
-          return;
-        }
-        Alert.alert('Error', error.message || 'Failed to save game');
-        console.error(error);
-        return;
-      }
-
-      await loadMyRankings();
-      await loadAllGames();
-      
-      setComparisonModal(false);
-      setStarRatingModal(false);
-      setSelectedGame(null);
-      setSelectedStarRating(0);
-      setNotes('');
-      setCurrentComparisonIndex(0);
-      setComparisonHistory([]);
-      setGamesToCompare([]);
-      
-      Alert.alert('Success', 'Game ranked successfully!');
-    } catch (error) {
-      if (error.message?.includes('JWT') || error.message?.includes('auth')) {
-        await supabase.auth.signOut();
-        return;
-      }
-      Alert.alert('Error', 'Failed to save game');
-      console.error(error);
-    }
-  };
 
   // Get unique genres from all games
   const availableGenres = ['All', ...new Set(allGames.map(g => g.genre).filter(Boolean))].sort();
@@ -401,10 +239,40 @@ export default function DiscoverScreen() {
         return false;
       }
 
-      // Rating filter - filter by average user rating
-      if (minRating > 0) {
+      // Rating filter - filter by star range
+      if (starFilter > 0) {
         const gameAvgRating = averageRatings[game.name]?.averageRating || 0;
-        if (gameAvgRating < minRating) {
+        // Star ranges: 1 star = 0-2, 2 stars = 2-4, 3 stars = 4-6, 4 stars = 6-8, 5 stars = 8-10
+        const minRating = (starFilter - 1) * 2;
+        const maxRating = starFilter * 2;
+        // For 5 stars, include 10 (maxRating), for others exclude maxRating
+        if (starFilter === 5) {
+          if (gameAvgRating < minRating || gameAvgRating > maxRating) {
+            return false;
+          }
+        } else {
+          if (gameAvgRating < minRating || gameAvgRating >= maxRating) {
+            return false;
+          }
+        }
+      }
+
+      // Ranked filter
+      if (rankedFilter !== 'all') {
+        const isRanked = isGameRanked(game.name);
+        if (rankedFilter === 'ranked' && !isRanked) {
+          return false;
+        }
+        if (rankedFilter === 'unranked' && isRanked) {
+          return false;
+        }
+      }
+
+      // Price filter
+      if (priceFilter > 0) {
+        const gamePrice = game.price || null;
+        const priceCategory = getPriceCategory(gamePrice);
+        if (priceCategory !== priceFilter) {
           return false;
         }
       }
@@ -430,6 +298,8 @@ export default function DiscoverScreen() {
   const renderGameItem = ({ item }) => {
     const ranked = isGameRanked(item.name);
     const avgRating = averageRatings[item.name];
+    const priceCategory = getPriceCategory(item.price);
+    const priceDisplay = priceCategory ? '$'.repeat(priceCategory) : '?';
     
     return (
       <TouchableOpacity
@@ -444,23 +314,24 @@ export default function DiscoverScreen() {
         />
         <View style={styles.gameInfo}>
           <Text style={styles.gameName}>{item.name}</Text>
-          <Text style={styles.gameGenre}>{item.genre}</Text>
-          {avgRating && (
-            <Text style={styles.avgRatingText}>
-              Avg: {avgRating.averageRating.toFixed(1)} ({avgRating.ratingCount} {avgRating.ratingCount === 1 ? 'rating' : 'ratings'})
-            </Text>
-          )}
+          <Text style={styles.gameGenre}>{priceDisplay} | {item.genre}</Text>
+          <Text style={styles.avgRatingText}>
+            User Avg: <Text style={styles.avgRatingValue}>{avgRating ? avgRating.averageRating.toFixed(1) : 'N/A'}</Text>
+          </Text>
         </View>
         {ranked ? (
-          <View style={styles.rankedBadge}>
-            <Text style={styles.rankedText}>✓ Ranked</Text>
-          </View>
-        ) : (
           <TouchableOpacity
-            style={styles.addButton}
+            style={styles.circleButton}
             onPress={() => handleAddGame(item)}
           >
-            <Text style={styles.addButtonText}>+ Add</Text>
+            <Ionicons name="refresh" size={20} color="#000" />
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={styles.circleButton}
+            onPress={() => handleAddGame(item)}
+          >
+            <Ionicons name="add" size={24} color="#000" />
           </TouchableOpacity>
         )}
       </TouchableOpacity>
@@ -469,13 +340,7 @@ export default function DiscoverScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Discover Games</Text>
-        <Text style={styles.headerSubtitle}>
-          Browse all games and add them to your rankings
-        </Text>
-      </View>
-
+      <AppHeader />
       <View style={styles.searchContainer}>
         <TextInput
           style={styles.searchInput}
@@ -489,6 +354,24 @@ export default function DiscoverScreen() {
       {/* Filter Buttons Row */}
       <View style={styles.filterButtonsRow}>
         <TouchableOpacity
+          style={[styles.filterChip, styles.filterChipActive]}
+          onPress={() => setOpenDropdown(openDropdown === 'sort' ? null : 'sort')}
+        >
+          <Text style={styles.filterChipTextActive}>
+            Sort: {sortBy === 'name' ? 'Name' : sortBy === 'rating' ? 'Rating' : 'Genre'}
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.filterChip, rankedFilter !== 'all' && styles.filterChipActive]}
+          onPress={() => setOpenDropdown(openDropdown === 'ranked' ? null : 'ranked')}
+        >
+          <Text style={[styles.filterChipText, rankedFilter !== 'all' && styles.filterChipTextActive]}>
+            Ranked: {rankedFilter === 'all' ? 'All' : rankedFilter === 'ranked' ? 'Ranked' : 'Unranked'}
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
           style={[styles.filterChip, selectedGenre !== 'All' && styles.filterChipActive]}
           onPress={() => setOpenDropdown(openDropdown === 'genre' ? null : 'genre')}
         >
@@ -498,20 +381,20 @@ export default function DiscoverScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.filterChip, minRating > 0 && styles.filterChipActive]}
+          style={[styles.filterChip, starFilter > 0 && styles.filterChipActive]}
           onPress={() => setOpenDropdown(openDropdown === 'rating' ? null : 'rating')}
         >
-          <Text style={[styles.filterChipText, minRating > 0 && styles.filterChipTextActive]}>
-            Rating: {minRating === 0 ? 'All' : `${minRating}+`}
+          <Text style={[styles.filterChipText, starFilter > 0 && styles.filterChipTextActive]}>
+            Avg Rating: {starFilter === 0 ? 'All' : '★'.repeat(starFilter)}
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.filterChip, styles.filterChipActive]}
-          onPress={() => setOpenDropdown(openDropdown === 'sort' ? null : 'sort')}
+          style={[styles.filterChip, priceFilter > 0 && styles.filterChipActive]}
+          onPress={() => setOpenDropdown(openDropdown === 'price' ? null : 'price')}
         >
-          <Text style={styles.filterChipTextActive}>
-            Sort: {sortBy === 'name' ? 'Name' : sortBy === 'rating' ? 'Rating' : 'Genre'}
+          <Text style={[styles.filterChipText, priceFilter > 0 && styles.filterChipTextActive]}>
+            Price: {priceFilter === 0 ? 'All' : '$'.repeat(priceFilter)}
           </Text>
         </TouchableOpacity>
       </View>
@@ -558,32 +441,96 @@ export default function DiscoverScreen() {
       {openDropdown === 'rating' && (
         <View style={styles.dropdownBubble}>
           <View style={styles.dropdownHeader}>
-            <Text style={styles.dropdownTitle}>Min Average Rating</Text>
+            <Text style={styles.dropdownTitle}>Filter by Avg Rating</Text>
             <TouchableOpacity onPress={() => setOpenDropdown(null)}>
               <Text style={styles.dropdownClose}>×</Text>
             </TouchableOpacity>
           </View>
           <View style={styles.ratingButtons}>
-            {[0, 2, 4, 6, 8].map((rating) => (
+            {[0, 1, 2, 3, 4, 5].map((stars) => (
               <TouchableOpacity
-                key={rating}
+                key={stars}
                 style={[
                   styles.ratingButton,
-                  minRating === rating && styles.ratingButtonActive,
+                  starFilter === stars && styles.ratingButtonActive,
                 ]}
                 onPress={() => {
-                  setMinRating(rating);
+                  setStarFilter(stars);
                   setOpenDropdown(null);
                 }}
               >
-                <Text
-                  style={[
-                    styles.ratingButtonText,
-                    minRating === rating && styles.ratingButtonTextActive,
-                  ]}
-                >
-                  {rating === 0 ? 'All Ratings' : `${rating}+`}
-                </Text>
+                {stars === 0 ? (
+                  <Text
+                    style={[
+                      styles.ratingButtonText,
+                      starFilter === stars && styles.ratingButtonTextActive,
+                    ]}
+                  >
+                    All Ratings
+                  </Text>
+                ) : (
+                  <Text
+                    style={[
+                      styles.ratingStarText,
+                      starFilter === stars && styles.ratingStarTextActive,
+                    ]}
+                  >
+                    {'★'.repeat(stars)}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      )}
+
+      {/* Price Dropdown Bubble */}
+      {openDropdown === 'price' && (
+        <View style={styles.dropdownBubble}>
+          <View style={styles.dropdownHeader}>
+            <Text style={styles.dropdownTitle}>Filter by Price</Text>
+            <TouchableOpacity onPress={() => setOpenDropdown(null)}>
+              <Text style={styles.dropdownClose}>×</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.ratingButtons}>
+            {[
+              { value: 0, label: 'All Prices', symbol: 'All' },
+              { value: 1, label: '$0-$20', symbol: '$' },
+              { value: 2, label: '$20-$40', symbol: '$$' },
+              { value: 3, label: '$40-$60', symbol: '$$$' },
+              { value: 4, label: '$60+', symbol: '$$$$' },
+            ].map((option) => (
+              <TouchableOpacity
+                key={option.value}
+                style={[
+                  styles.ratingButton,
+                  priceFilter === option.value && styles.ratingButtonActive,
+                ]}
+                onPress={() => {
+                  setPriceFilter(option.value);
+                  setOpenDropdown(null);
+                }}
+              >
+                {option.value === 0 ? (
+                  <Text
+                    style={[
+                      styles.ratingButtonText,
+                      priceFilter === option.value && styles.ratingButtonTextActive,
+                    ]}
+                  >
+                    {option.label}
+                  </Text>
+                ) : (
+                  <Text
+                    style={[
+                      styles.priceSymbolText,
+                      priceFilter === option.value && styles.priceSymbolTextActive,
+                    ]}
+                  >
+                    {option.symbol}
+                  </Text>
+                )}
               </TouchableOpacity>
             ))}
           </View>
@@ -630,9 +577,49 @@ export default function DiscoverScreen() {
         </View>
       )}
 
+      {/* Ranked Dropdown Bubble */}
+      {openDropdown === 'ranked' && (
+        <View style={styles.dropdownBubble}>
+          <View style={styles.dropdownHeader}>
+            <Text style={styles.dropdownTitle}>Filter by Ranked Status</Text>
+            <TouchableOpacity onPress={() => setOpenDropdown(null)}>
+              <Text style={styles.dropdownClose}>×</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.sortButtons}>
+            {[
+              { value: 'all', label: 'All Games' },
+              { value: 'ranked', label: 'Ranked Only' },
+              { value: 'unranked', label: 'Unranked Only' },
+            ].map((option) => (
+              <TouchableOpacity
+                key={option.value}
+                style={[
+                  styles.sortButton,
+                  rankedFilter === option.value && styles.sortButtonActive,
+                ]}
+                onPress={() => {
+                  setRankedFilter(option.value);
+                  setOpenDropdown(null);
+                }}
+              >
+                <Text
+                  style={[
+                    styles.sortButtonText,
+                    rankedFilter === option.value && styles.sortButtonTextActive,
+                  ]}
+                >
+                  {option.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      )}
+
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#6c5ce7" />
+          <ActivityIndicator size="large" color="#001f3f" />
           <Text style={styles.loadingText}>Loading games...</Text>
         </View>
       ) : (
@@ -649,236 +636,32 @@ export default function DiscoverScreen() {
         />
       )}
 
-      {/* Star Rating Modal */}
-      <Modal
-        visible={starRatingModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => {
-          setStarRatingModal(false);
-          setSelectedGame(null);
+      <GameRankingModals
+        starRatingModal={ranking.starRatingModal}
+        comparisonModal={ranking.comparisonModal}
+        notesModal={ranking.notesModal}
+        selectedGame={ranking.selectedGame}
+        selectedStarRating={ranking.selectedStarRating}
+        notes={ranking.notes}
+        currentComparisonIndex={ranking.currentComparisonIndex}
+        comparisonHistory={ranking.comparisonHistory}
+        gamesToCompare={ranking.gamesToCompare}
+        onStarRatingSelect={ranking.handleStarRatingSelect}
+        onGameChoice={ranking.handleGameChoice}
+        onUndo={ranking.handleUndo}
+        onTooTough={ranking.handleTooTough}
+        onSkip={ranking.handleSkip}
+        onCancelComparison={ranking.handleCancelComparison}
+        onCancelStarRating={() => {
+          ranking.setStarRatingModal(false);
+          ranking.setSelectedGame(null);
+          ranking.setSelectedStarRating(0);
+          ranking.setNotes('');
         }}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Rate This Game</Text>
-            <Text style={styles.modalSubtitle}>
-              {selectedGame?.name}
-            </Text>
-            <Text style={styles.starRatingPrompt}>
-              How many stars would you give this game?
-            </Text>
-
-            <View style={styles.horizontalStarContainer}>
-              {[1, 2, 3, 4, 5].map((star) => (
-                <TouchableOpacity
-                  key={star}
-                  onPress={() => {
-                    setSelectedStarRating(star);
-                  }}
-                  style={styles.horizontalStarButton}
-                >
-                  <Text
-                    style={[
-                      styles.horizontalStar,
-                      star <= selectedStarRating && styles.horizontalStarFilled,
-                    ]}
-                  >
-                    ★
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <View style={styles.starRatingActions}>
-              <TouchableOpacity
-                style={styles.notesButton}
-                onPress={() => setNotesModal(true)}
-              >
-                <Text style={styles.notesButtonText}>📝 Notes</Text>
-              </TouchableOpacity>
-              
-              <View style={styles.starRatingButtons}>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.cancelButton, { flex: 1, marginRight: 5 }]}
-                  onPress={() => {
-                    setStarRatingModal(false);
-                    setSelectedGame(null);
-                    setSelectedStarRating(0);
-                    setNotes('');
-                  }}
-                >
-                  <Text style={styles.modalButtonText}>Cancel</Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity
-                  style={[styles.modalButton, { flex: 1, marginLeft: 5 }]}
-                  onPress={() => {
-                    if (selectedStarRating === 0) {
-                      Alert.alert('Error', 'Please select a star rating');
-                      return;
-                    }
-                    handleStarRatingSelect(selectedStarRating);
-                  }}
-                  disabled={selectedStarRating === 0}
-                >
-                  <Text style={[styles.modalButtonText, selectedStarRating === 0 && styles.disabledButtonText]}>
-                    Continue
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Notes Modal */}
-      <Modal
-        visible={notesModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setNotesModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalTitleContainer}>
-              <Text style={styles.modalTitle}>Add Notes</Text>
-              <TouchableOpacity
-                style={styles.closeButton}
-                onPress={() => setNotesModal(false)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Text style={styles.closeButtonText}>×</Text>
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.modalSubtitle}>
-              {selectedGame?.name}
-            </Text>
-            <TextInput
-              style={styles.notesInput}
-              placeholder="Add your thoughts about this game..."
-              placeholderTextColor="#95a5a6"
-              value={notes}
-              onChangeText={setNotes}
-              multiline
-              numberOfLines={8}
-              textAlignVertical="top"
-            />
-            <TouchableOpacity
-              style={styles.modalButton}
-              onPress={() => setNotesModal(false)}
-            >
-              <Text style={styles.modalButtonText}>Save Notes</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Comparison Modal */}
-      <Modal
-        visible={comparisonModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => {
-          setComparisonModal(false);
-          setSelectedGame(null);
-          setSelectedStarRating(0);
-          setCurrentComparisonIndex(0);
-          setComparisonHistory([]);
-          setGamesToCompare([]);
-        }}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalTitleContainer}>
-              <Text style={styles.modalTitle}>Which do you prefer?</Text>
-              <TouchableOpacity
-                style={styles.closeButton}
-                onPress={handleCancelComparison}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Text style={styles.closeButtonText}>×</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Side by Side Comparison */}
-            <View style={styles.sideBySideContainer}>
-              {/* New Game (Left) */}
-              <TouchableOpacity
-                style={[styles.comparisonCard, { marginRight: 7.5 }]}
-                onPress={() => handleGameChoice('new')}
-                activeOpacity={0.7}
-              >
-                {selectedGame?.name && (
-                  <GameImage 
-                    gameName={selectedGame.name}
-                    style={styles.comparisonCardImage}
-                    resizeMode="cover"
-                  />
-                )}
-                <Text style={styles.comparisonGameNameCenter} numberOfLines={3}>
-                  {selectedGame?.name}
-                </Text>
-                <Text style={styles.comparisonGameGenre}>{selectedGame?.genre}</Text>
-                <Text style={styles.ratingScore}>
-                  {selectedStarRating} {selectedStarRating === 1 ? 'Star' : 'Stars'}
-                </Text>
-              </TouchableOpacity>
-
-              {/* Existing Game (Right) */}
-              {gamesToCompare[currentComparisonIndex] && (
-                <TouchableOpacity
-                  style={[styles.comparisonCard, { marginLeft: 7.5 }]}
-                  onPress={() => handleGameChoice('existing')}
-                  activeOpacity={0.7}
-                >
-                  <GameImage 
-                    gameName={gamesToCompare[currentComparisonIndex].name}
-                    style={styles.comparisonCardImage}
-                    resizeMode="cover"
-                  />
-                  <Text style={styles.comparisonGameNameCenter} numberOfLines={3}>
-                    {gamesToCompare[currentComparisonIndex].name}
-                  </Text>
-                  <Text style={styles.comparisonGameGenre}>
-                    {gamesToCompare[currentComparisonIndex].genre}
-                  </Text>
-                  <Text style={styles.ratingScore}>
-                    {Math.max(0, Math.min(10, parseFloat(gamesToCompare[currentComparisonIndex].rating || 0))).toFixed(1)}
-                  </Text>
-                </TouchableOpacity>
-              )}
-            </View>
-
-            {/* Action Buttons */}
-            <View style={styles.comparisonActions}>
-              <TouchableOpacity
-                style={[styles.actionButton, styles.undoButton, { marginRight: 5 }]}
-                onPress={handleUndo}
-                disabled={comparisonHistory.length === 0}
-              >
-                <Text style={[styles.actionButtonText, comparisonHistory.length === 0 && styles.disabledButtonText]}>
-                  Undo
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.actionButton, styles.tooToughButton, { marginHorizontal: 5 }]}
-                onPress={handleTooTough}
-              >
-                <Text style={[styles.actionButtonText, styles.centeredButtonText]}>Too Tough</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.actionButton, styles.skipButton, { marginLeft: 5 }]}
-                onPress={handleSkip}
-              >
-                <Text style={styles.actionButtonText}>Skip</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        setSelectedStarRating={ranking.setSelectedStarRating}
+        setNotes={ranking.setNotes}
+        setNotesModal={ranking.setNotesModal}
+      />
     </View>
   );
 }
@@ -886,73 +669,77 @@ export default function DiscoverScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#fff',
   },
   header: {
     padding: 20,
     paddingTop: 60,
-    backgroundColor: '#16213e',
+    backgroundColor: '#fff',
   },
   headerTitle: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#fff',
+    fontFamily: 'Raleway',
+    color: '#000',
     marginBottom: 5,
   },
   headerSubtitle: {
     fontSize: 14,
-    color: '#b2bec3',
+    fontFamily: 'Raleway',
+    color: '#666',
   },
   searchContainer: {
     padding: 15,
-    backgroundColor: '#16213e',
+    backgroundColor: '#fff',
   },
   searchInput: {
-    backgroundColor: '#2d3436',
+    backgroundColor: '#fff',
     borderRadius: 10,
     padding: 15,
-    color: '#fff',
+    color: '#000',
     fontSize: 16,
+    fontFamily: 'Raleway',
     borderWidth: 1,
-    borderColor: '#636e72',
+    borderColor: '#ddd',
   },
   filterButtonsRow: {
     flexDirection: 'row',
     paddingHorizontal: 15,
     paddingBottom: 10,
-    backgroundColor: '#16213e',
+    backgroundColor: '#fff',
     gap: 8,
     flexWrap: 'wrap',
   },
   filterChip: {
-    backgroundColor: '#2d3436',
+    backgroundColor: '#fff',
     borderRadius: 20,
     paddingHorizontal: 15,
     paddingVertical: 8,
     borderWidth: 1,
-    borderColor: '#636e72',
+    borderColor: '#ddd',
   },
   filterChipActive: {
-    backgroundColor: '#6c5ce7',
-    borderColor: '#6c5ce7',
+    backgroundColor: '#001f3f',
+    borderColor: '#001f3f',
   },
   filterChipText: {
-    color: '#b2bec3',
+    color: '#666',
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: 'Raleway',
   },
   filterChipTextActive: {
     color: '#fff',
     fontWeight: 'bold',
   },
   dropdownBubble: {
-    backgroundColor: '#2d3436',
+    backgroundColor: '#fff',
     marginHorizontal: 15,
     marginBottom: 10,
     borderRadius: 12,
     padding: 15,
     borderWidth: 1,
-    borderColor: '#636e72',
+    borderColor: '#ddd',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
@@ -966,14 +753,16 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   dropdownTitle: {
-    color: '#fff',
+    color: '#000',
     fontSize: 16,
     fontWeight: 'bold',
+    fontFamily: 'Raleway',
   },
   dropdownClose: {
-    color: '#95a5a6',
+    color: '#666',
     fontSize: 24,
     fontWeight: 'bold',
+    fontFamily: 'Raleway',
     lineHeight: 24,
   },
   genreScrollView: {
@@ -985,19 +774,19 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   genreButton: {
-    backgroundColor: '#2d3436',
+    backgroundColor: '#fff',
     borderRadius: 8,
     paddingHorizontal: 15,
     paddingVertical: 8,
     borderWidth: 1,
-    borderColor: '#636e72',
+    borderColor: '#ddd',
   },
   genreButtonActive: {
-    backgroundColor: '#6c5ce7',
-    borderColor: '#6c5ce7',
+    backgroundColor: '#001f3f',
+    borderColor: '#001f3f',
   },
   genreButtonText: {
-    color: '#b2bec3',
+    color: '#666',
     fontSize: 14,
   },
   genreButtonTextActive: {
@@ -1005,8 +794,9 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   moreGenresText: {
-    color: '#95a5a6',
+    color: '#666',
     fontSize: 12,
+    fontFamily: 'Raleway',
     marginTop: 5,
     fontStyle: 'italic',
   },
@@ -1016,116 +806,130 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   ratingButton: {
-    backgroundColor: '#2d3436',
+    backgroundColor: '#fff',
     borderRadius: 8,
     paddingHorizontal: 15,
     paddingVertical: 8,
     borderWidth: 1,
-    borderColor: '#636e72',
+    borderColor: '#ddd',
     minWidth: 60,
     alignItems: 'center',
   },
   ratingButtonActive: {
-    backgroundColor: '#fdcb6e',
-    borderColor: '#fdcb6e',
+    backgroundColor: '#001f3f',
+    borderColor: '#001f3f',
   },
   ratingButtonText: {
-    color: '#b2bec3',
+    color: '#666',
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: 'Raleway',
   },
   ratingButtonTextActive: {
-    color: '#1a1a2e',
+    color: '#fff',
     fontWeight: 'bold',
+  },
+  ratingStarText: {
+    color: '#ddd',
+    fontSize: 24,
+    fontFamily: 'Raleway',
+  },
+  ratingStarTextActive: {
+    color: '#001f3f',
+  },
+  priceSymbolText: {
+    color: '#666',
+    fontSize: 18,
+    fontWeight: 'bold',
+    fontFamily: 'Raleway',
+  },
+  priceSymbolTextActive: {
+    color: '#fff',
   },
   sortButtons: {
     flexDirection: 'column',
     gap: 8,
   },
   sortButton: {
-    backgroundColor: '#2d3436',
+    backgroundColor: '#fff',
     borderRadius: 8,
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderWidth: 1,
-    borderColor: '#636e72',
+    borderColor: '#ddd',
   },
   sortButtonActive: {
-    backgroundColor: '#00b894',
-    borderColor: '#00b894',
+    backgroundColor: '#001f3f',
+    borderColor: '#001f3f',
   },
   sortButtonText: {
-    color: '#b2bec3',
+    color: '#666',
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: 'Raleway',
   },
   sortButtonTextActive: {
     color: '#fff',
     fontWeight: 'bold',
   },
   avgRatingText: {
-    color: '#74b9ff',
+    color: '#001f3f',
     fontSize: 12,
+    fontFamily: 'Raleway',
     marginTop: 4,
+  },
+  avgRatingValue: {
+    fontWeight: 'bold',
   },
   list: {
     padding: 15,
   },
   gameItem: {
     flexDirection: 'row',
-    backgroundColor: '#2d3436',
+    backgroundColor: '#fff',
     borderRadius: 12,
     padding: 15,
     marginBottom: 12,
     alignItems: 'center',
     justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#ddd',
   },
   rankedGameItem: {
     opacity: 0.6,
     borderWidth: 2,
-    borderColor: '#00b894',
+    borderColor: '#001f3f',
   },
   gameImage: {
     width: 50,
     height: 70,
     borderRadius: 8,
     marginRight: 15,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#f5f5f5',
   },
   gameInfo: {
     flex: 1,
   },
   gameName: {
-    color: '#fff',
+    color: '#000',
     fontSize: 18,
     fontWeight: '600',
+    fontFamily: 'Raleway',
     marginBottom: 5,
   },
   gameGenre: {
-    color: '#95a5a6',
+    color: '#666',
     fontSize: 14,
   },
-  addButton: {
-    backgroundColor: '#6c5ce7',
-    borderRadius: 8,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-  },
-  addButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  rankedBadge: {
-    backgroundColor: '#00b894',
-    borderRadius: 8,
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-  },
-  rankedText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: 'bold',
+  circleButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: '#000',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   emptyState: {
     padding: 40,
@@ -1145,235 +949,6 @@ const styles = StyleSheet.create({
     color: '#95a5a6',
     fontSize: 16,
     marginTop: 15,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    backgroundColor: '#2d3436',
-    borderRadius: 20,
-    padding: 20,
-    width: '95%',
-    maxHeight: '80%',
-  },
-  modalTitleContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-    width: '100%',
-  },
-  modalTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff',
-    textAlign: 'center',
-    flex: 1,
-  },
-  modalSubtitle: {
-    fontSize: 16,
-    color: '#b2bec3',
-    marginBottom: 20,
-    textAlign: 'center',
-  },
-  closeButton: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: '#636e72',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 10,
-  },
-  closeButtonText: {
-    color: '#fff',
-    fontSize: 24,
-    fontWeight: 'bold',
-    lineHeight: 24,
-  },
-  starRatingPrompt: {
-    fontSize: 16,
-    color: '#b2bec3',
-    textAlign: 'center',
-    marginBottom: 20,
-    marginTop: 10,
-  },
-  starContainer: {
-    marginVertical: 20,
-  },
-  starButton: {
-    backgroundColor: '#1a1a2e',
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 10,
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#636e72',
-  },
-  starRow: {
-    flexDirection: 'row',
-    marginBottom: 8,
-  },
-  star: {
-    fontSize: 32,
-    color: '#636e72',
-    marginHorizontal: 4,
-  },
-  starFilled: {
-    color: '#fdcb6e',
-  },
-  starLabel: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  horizontalStarContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginVertical: 30,
-    gap: 15,
-  },
-  horizontalStarButton: {
-    padding: 5,
-  },
-  horizontalStar: {
-    fontSize: 48,
-    color: '#636e72',
-  },
-  horizontalStarFilled: {
-    color: '#fdcb6e',
-  },
-  starRatingActions: {
-    marginTop: 20,
-  },
-  starRatingButtons: {
-    flexDirection: 'row',
-    marginTop: 10,
-  },
-  notesButton: {
-    backgroundColor: '#74b9ff',
-    borderRadius: 10,
-    padding: 15,
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  notesButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  notesInput: {
-    backgroundColor: '#1a1a2e',
-    borderRadius: 10,
-    padding: 15,
-    color: '#fff',
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: '#636e72',
-    minHeight: 150,
-    marginBottom: 20,
-    textAlignVertical: 'top',
-  },
-  disabledButtonText: {
-    opacity: 0.5,
-  },
-  modalButton: {
-    backgroundColor: '#6c5ce7',
-    borderRadius: 10,
-    padding: 15,
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  cancelButton: {
-    backgroundColor: '#636e72',
-    marginTop: 10,
-  },
-  modalButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  sideBySideContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 30,
-    width: '100%',
-  },
-  comparisonCard: {
-    flex: 1,
-    backgroundColor: '#1a1a2e',
-    borderRadius: 12,
-    padding: 15,
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#636e72',
-    minHeight: 280,
-    justifyContent: 'flex-start',
-    minWidth: '45%',
-  },
-  comparisonCardImage: {
-    width: '100%',
-    height: 140,
-    borderRadius: 8,
-    marginBottom: 10,
-    backgroundColor: '#2d3436',
-  },
-  comparisonGameNameCenter: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-    textAlign: 'center',
-    marginBottom: 10,
-    paddingHorizontal: 5,
-  },
-  comparisonGameGenre: {
-    color: '#95a5a6',
-    fontSize: 14,
-    marginTop: 4,
-    textAlign: 'center',
-  },
-  ratingScore: {
-    color: '#fdcb6e',
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  comparisonActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 10,
-  },
-  actionButton: {
-    flex: 1,
-    borderRadius: 10,
-    padding: 15,
-    alignItems: 'center',
-  },
-  undoButton: {
-    backgroundColor: '#636e72',
-  },
-  tooToughButton: {
-    backgroundColor: '#fdcb6e',
-  },
-  skipButton: {
-    backgroundColor: '#74b9ff',
-  },
-  actionButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  disabledButtonText: {
-    opacity: 0.5,
-  },
-  centeredButtonText: {
-    textAlign: 'center',
   },
 });
 

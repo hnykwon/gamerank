@@ -1,11 +1,12 @@
-// Game Image Service using RAWG.io API
+// Game Image Service - Checks database first, then falls back to RAWG.io API
 // Get your free API key at: https://rawg.io/apidocs
 
 // IMPORTANT: Replace this with your RAWG.io API key
 // Sign up at https://rawg.io/apidocs to get a free API key
 const RAWG_API_KEY = 'd2b865c2d8ea46bda24975b72b12fb90'; // Replace with your actual API key
 
-import { trackAPIResponse, initUsageTracker } from './rawgUsageTracker';
+import { trackAPIResponse, initUsageTracker } from './rawgUsageTracker.js';
+import { supabase } from '../config/supabase.js';
 
 // Initialize usage tracker
 initUsageTracker();
@@ -48,9 +49,34 @@ const gameNamesMatch = (name1, name2) => {
 export const fetchGameImageUrl = async (gameName) => {
   // Check cache first
   if (imageCache.has(gameName)) {
-    return imageCache.get(gameName);
+    const cachedUrl = imageCache.get(gameName);
+    // Check if cached URL indicates source
+    if (cachedUrl.source) {
+      return cachedUrl.url || cachedUrl;
+    }
+    return cachedUrl;
   }
 
+  // STEP 1: Try to get image from database first
+  try {
+    const { data: dbGame, error: dbError } = await supabase
+      .from('games')
+      .select('image_url, name')
+      .eq('name', gameName)
+      .single();
+
+    if (!dbError && dbGame && dbGame.image_url) {
+      // Found image in database!
+      imageCache.set(gameName, dbGame.image_url);
+      console.log(`✓ Found image for: ${gameName} -> ${dbGame.name} [DATABASE]`);
+      return dbGame.image_url;
+    }
+  } catch (error) {
+    // Database query failed, continue to API fallback
+    console.warn(`Database check failed for ${gameName}, trying API...`);
+  }
+
+  // STEP 2: Fallback to RAWG API if not in database
   // If no API key is set, return placeholder
   if (!RAWG_API_KEY || RAWG_API_KEY === 'YOUR_RAWG_API_KEY_HERE') {
     const placeholderUrl = generatePlaceholderUrl(gameName);
@@ -93,7 +119,7 @@ export const fetchGameImageUrl = async (gameName) => {
       
       if (imageUrl) {
         imageCache.set(gameName, imageUrl);
-        console.log(`✓ Found image for: ${gameName} -> ${matchedGame.name}`);
+        console.log(`✓ Found image for: ${gameName} -> ${matchedGame.name} [RAWG API]`);
         return imageUrl;
       }
     }
@@ -120,7 +146,7 @@ export const fetchGameImageUrl = async (gameName) => {
           
           if (imageUrl) {
             imageCache.set(gameName, imageUrl);
-            console.log(`✓ Found image for: ${gameName} (simplified: ${simplifiedName}) -> ${game.name}`);
+            console.log(`✓ Found image for: ${gameName} (simplified: ${simplifiedName}) -> ${game.name} [RAWG API]`);
             return imageUrl;
           }
         }

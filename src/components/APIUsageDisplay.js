@@ -51,10 +51,10 @@ export default function APIUsageDisplay() {
 
   const getStatusColor = () => {
     const percentage = getUsagePercentage();
-    if (percentage === null) return '#95a5a6';
-    if (percentage < 50) return '#00b894'; // Green
-    if (percentage < 80) return '#fdcb6e'; // Yellow
-    return '#d63031'; // Red
+    if (percentage === null) return '#666';
+    if (percentage < 50) return '#001f3f'; // Green
+    if (percentage < 80) return '#001f3f'; // Yellow
+    return '#000'; // Red
   };
 
   return (
@@ -101,7 +101,7 @@ export default function APIUsageDisplay() {
                   <Text style={styles.sectionTitle}>RAWG.io Rate Limits</Text>
                   <View style={styles.statRow}>
                     <Text style={styles.statLabel}>Remaining:</Text>
-                    <Text style={[styles.statValue, { color: getStatusColor() }]}>
+                    <Text style={styles.statValue}>
                       {usageStats.rateLimitRemaining?.toLocaleString() || 'N/A'}
                     </Text>
                   </View>
@@ -175,25 +175,26 @@ export default function APIUsageDisplay() {
 
 const styles = StyleSheet.create({
   usageButton: {
-    backgroundColor: '#636e72',
+    backgroundColor: '#ddd',
     borderRadius: 10,
     padding: 12,
     alignItems: 'center',
     marginTop: 10,
   },
   usageButtonText: {
-    color: '#fff',
+    color: '#000',
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: 'Raleway',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalContent: {
-    backgroundColor: '#2d3436',
+    backgroundColor: '#000',
     borderRadius: 20,
     padding: 20,
     width: '90%',
@@ -202,6 +203,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 24,
     fontWeight: 'bold',
+    fontFamily: 'Raleway',
     color: '#fff',
     marginBottom: 20,
     textAlign: 'center',
@@ -212,13 +214,14 @@ const styles = StyleSheet.create({
   statSection: {
     marginBottom: 25,
     padding: 15,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#000',
     borderRadius: 12,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#6c5ce7',
+    fontFamily: 'Raleway',
+    color: '#fff',
     marginBottom: 15,
   },
   statRow: {
@@ -228,20 +231,22 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
   },
   statLabel: {
-    color: '#b2bec3',
+    color: '#ccc',
     fontSize: 16,
+    fontFamily: 'Raleway',
   },
   statValue: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+    fontFamily: 'ProximaNova-Bold',
   },
   progressContainer: {
     marginTop: 15,
   },
   progressBar: {
     height: 20,
-    backgroundColor: '#636e72',
+    backgroundColor: '#ddd',
     borderRadius: 10,
     overflow: 'hidden',
     marginBottom: 8,
@@ -251,45 +256,50 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   progressText: {
-    color: '#b2bec3',
+    color: '#fff',
     fontSize: 12,
+    fontFamily: 'Raleway',
     textAlign: 'center',
   },
   infoBox: {
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#000',
     borderRadius: 12,
     padding: 15,
     marginBottom: 15,
     borderLeftWidth: 4,
-    borderLeftColor: '#74b9ff',
+    borderLeftColor: '#001f3f',
   },
   infoTitle: {
-    color: '#74b9ff',
+    color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+    fontFamily: 'Raleway',
     marginBottom: 8,
   },
   infoText: {
-    color: '#b2bec3',
+    color: '#ccc',
     fontSize: 14,
+    fontFamily: 'Raleway',
     lineHeight: 20,
   },
   infoSubtext: {
-    color: '#95a5a6',
+    color: '#aaa',
     fontSize: 12,
+    fontFamily: 'Raleway',
     marginTop: 5,
   },
   closeButton: {
-    backgroundColor: '#636e72',
+    backgroundColor: '#ddd',
     borderRadius: 10,
     padding: 15,
     alignItems: 'center',
     marginTop: 20,
   },
   closeButtonText: {
-    color: '#fff',
+    color: '#000',
     fontSize: 16,
     fontWeight: 'bold',
+    fontFamily: 'Raleway',
   },
 });
 

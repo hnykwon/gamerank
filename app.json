@@ -5,9 +5,11 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
+    "icon": "./assets/Cartridge Logo.png",
     "splash": {
+      "image": "./assets/Cartridge Logo.png",
       "resizeMode": "contain",
-      "backgroundColor": "#1a1a2e"
+      "backgroundColor": "#FFFFFF"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -15,13 +17,19 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.gamerank.app",
-      "buildNumber": "1.0.0"
+      "buildNumber": "1.0.0",
+      "icon": "./assets/Cartridge Logo.png"
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#1a1a2e"
+        "foregroundImage": "./assets/Cartridge Logo.png",
+        "backgroundColor": "#FFFFFF"
       },
-      "package": "com.gamerank.app"
+      "package": "com.gamerank.app",
+      "icon": "./assets/Cartridge Logo.png"
+    },
+    "web": {
+      "favicon": "./assets/Cartridge Logo.png"
     }
   }
 }

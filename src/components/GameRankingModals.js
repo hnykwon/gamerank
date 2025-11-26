@@ -41,54 +41,74 @@ export default function GameRankingModals({
         onRequestClose={onCancelStarRating}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={styles.modalContentStarRating}>
             <Text style={styles.modalTitle}>Rate This Game</Text>
-            <Text style={styles.modalSubtitle}>
-              {selectedGame?.name}
-            </Text>
-            <Text style={styles.starRatingPrompt}>
-              How many stars would you give this game?
-            </Text>
-
-            <View style={styles.horizontalStarContainer}>
-              {[1, 2, 3, 4, 5].map((star) => (
-                <TouchableOpacity
-                  key={star}
-                  onPress={() => {
-                    setSelectedStarRating(star);
-                  }}
-                  style={styles.horizontalStarButton}
-                >
-                  <Text
-                    style={[
-                      styles.horizontalStar,
-                      star <= selectedStarRating && styles.horizontalStarFilled,
-                    ]}
-                  >
-                    ★
+            
+            {/* Game Info Block - Separate Card */}
+            <View style={styles.gameInfoBlock}>
+              <View style={styles.gameInfoContent}>
+                <View style={styles.gameInfoText}>
+                  <Text style={styles.gameInfoName}>{selectedGame?.name}</Text>
+                  <Text style={styles.gameInfoDetails}>
+                    {(() => {
+                      const getPriceCategory = (price) => {
+                        if (!price || price === null || price === undefined) return null;
+                        const numPrice = parseFloat(price);
+                        if (isNaN(numPrice)) return null;
+                        if (numPrice < 20) return 1;
+                        if (numPrice < 40) return 2;
+                        if (numPrice < 60) return 3;
+                        return 4;
+                      };
+                      const priceCategory = getPriceCategory(selectedGame?.price);
+                      const priceDisplay = priceCategory ? '$'.repeat(priceCategory) : '?';
+                      return `${priceDisplay} | ${selectedGame?.genre || 'Unknown'}`;
+                    })()}
                   </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.closeInfoButton}
+                  onPress={onCancelStarRating}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Text style={styles.closeInfoButtonText}>×</Text>
                 </TouchableOpacity>
-              ))}
+              </View>
             </View>
 
-            <View style={styles.starRatingActions}>
-              <TouchableOpacity
-                style={styles.notesButton}
-                onPress={() => setNotesModal(true)}
-              >
-                <Text style={styles.notesButtonText}>📝 Notes</Text>
-              </TouchableOpacity>
-              
-              <View style={styles.starRatingButtons}>
+            {/* Star Rating Block - Separate Card */}
+            <View style={styles.ratingBlock}>
+              <View style={styles.horizontalStarContainer}>
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <TouchableOpacity
+                    key={star}
+                    onPress={() => {
+                      setSelectedStarRating(star);
+                    }}
+                    style={styles.horizontalStarButton}
+                  >
+                    <Text
+                      style={[
+                        styles.horizontalStar,
+                        star <= selectedStarRating && styles.horizontalStarFilled,
+                      ]}
+                    >
+                      ★
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <View style={styles.starRatingActions}>
                 <TouchableOpacity
-                  style={[styles.modalButton, styles.cancelButton, { flex: 1, marginRight: 5 }]}
-                  onPress={onCancelStarRating}
+                  style={styles.notesButton}
+                  onPress={() => setNotesModal(true)}
                 >
-                  <Text style={styles.modalButtonText}>Cancel</Text>
+                  <Text style={styles.notesButtonText}>Add Note</Text>
                 </TouchableOpacity>
                 
                 <TouchableOpacity
-                  style={[styles.modalButton, { flex: 1, marginLeft: 5 }]}
+                  style={[styles.rankButton, selectedStarRating === 0 && styles.rankButtonDisabled]}
                   onPress={() => {
                     if (selectedStarRating === 0) {
                       Alert.alert('Error', 'Please select a star rating');
@@ -98,8 +118,8 @@ export default function GameRankingModals({
                   }}
                   disabled={selectedStarRating === 0}
                 >
-                  <Text style={[styles.modalButtonText, selectedStarRating === 0 && styles.disabledButtonText]}>
-                    Continue
+                  <Text style={[styles.rankButtonText, selectedStarRating === 0 && styles.disabledButtonText]}>
+                    Rank
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -133,7 +153,7 @@ export default function GameRankingModals({
             <TextInput
               style={styles.notesInput}
               placeholder="Add your thoughts about this game..."
-              placeholderTextColor="#95a5a6"
+              placeholderTextColor="#666"
               value={notes}
               onChangeText={setNotes}
               multiline
@@ -187,9 +207,6 @@ export default function GameRankingModals({
                   {selectedGame?.name}
                 </Text>
                 <Text style={styles.comparisonGameGenre}>{selectedGame?.genre}</Text>
-                <Text style={styles.ratingScore}>
-                  {selectedStarRating * 2}.0
-                </Text>
               </TouchableOpacity>
 
               {gamesToCompare[currentComparisonIndex] && (
@@ -222,7 +239,7 @@ export default function GameRankingModals({
                 onPress={onUndo}
                 disabled={comparisonHistory.length === 0}
               >
-                <Text style={[styles.actionButtonText, comparisonHistory.length === 0 && styles.disabledButtonText]}>
+                <Text style={[styles.undoButtonText, comparisonHistory.length === 0 && styles.disabledButtonText]}>
                   Undo
                 </Text>
               </TouchableOpacity>
@@ -251,12 +268,19 @@ export default function GameRankingModals({
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalContent: {
-    backgroundColor: '#2d3436',
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 20,
+    width: '95%',
+    maxHeight: '80%',
+  },
+  modalContentStarRating: {
+    backgroundColor: 'transparent',
     borderRadius: 20,
     padding: 20,
     width: '95%',
@@ -272,64 +296,102 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#fff',
+    fontFamily: 'Raleway',
+    color: '#000',
     textAlign: 'center',
     flex: 1,
   },
   modalSubtitle: {
-    fontSize: 16,
-    color: '#b2bec3',
+    fontSize: 24,
+    fontWeight: 'bold',
+    fontFamily: 'Raleway',
+    color: '#000',
     marginBottom: 20,
     textAlign: 'center',
   },
+  gameInfoBlock: {
+    backgroundColor: '#f5f5f5',
+    borderRadius: 12,
+    padding: 15,
+    marginBottom: 15,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  gameInfoContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  gameInfoText: {
+    flex: 1,
+    marginRight: 10,
+  },
+  gameInfoName: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    fontFamily: 'Raleway',
+    color: '#000',
+    marginBottom: 8,
+  },
+  gameInfoDetails: {
+    fontSize: 14,
+    fontFamily: 'Raleway',
+    color: '#666',
+  },
+  closeInfoButton: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeInfoButtonText: {
+    color: '#000',
+    fontSize: 28,
+    fontWeight: 'bold',
+    fontFamily: 'Raleway',
+    lineHeight: 28,
+  },
+  ratingBlock: {
+    backgroundColor: '#f5f5f5',
+    borderRadius: 12,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
   closeButton: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: '#636e72',
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 10,
   },
   closeButtonText: {
-    color: '#fff',
-    fontSize: 24,
+    color: '#000',
+    fontSize: 28,
     fontWeight: 'bold',
-    lineHeight: 24,
-  },
-  starRatingPrompt: {
-    fontSize: 16,
-    color: '#b2bec3',
-    textAlign: 'center',
-    marginBottom: 20,
-    marginTop: 10,
+    fontFamily: 'Raleway',
+    lineHeight: 28,
   },
   horizontalStarContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginVertical: 30,
-    gap: 15,
+    marginBottom: 20,
+    gap: 8,
   },
   horizontalStarButton: {
     padding: 5,
   },
   horizontalStar: {
     fontSize: 48,
-    color: '#636e72',
+    fontFamily: 'Raleway',
+    color: '#ddd',
   },
   horizontalStarFilled: {
-    color: '#fdcb6e',
+    color: '#001f3f',
   },
   starRatingActions: {
     marginTop: 20,
   },
-  starRatingButtons: {
-    flexDirection: 'row',
-    marginTop: 10,
-  },
   notesButton: {
-    backgroundColor: '#74b9ff',
+    backgroundColor: '#001f3f',
     borderRadius: 10,
     padding: 15,
     alignItems: 'center',
@@ -339,34 +401,58 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+    fontFamily: 'Raleway',
   },
-  notesInput: {
-    backgroundColor: '#1a1a2e',
+  rankButton: {
+    backgroundColor: '#001f3f',
     borderRadius: 10,
     padding: 15,
+    alignItems: 'center',
+  },
+  rankButtonDisabled: {
+    opacity: 0.5,
+  },
+  rankButtonText: {
     color: '#fff',
     fontSize: 16,
+    fontWeight: 'bold',
+    fontFamily: 'Raleway',
+  },
+  notesInput: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 15,
+    color: '#000',
+    fontSize: 16,
+    fontFamily: 'Raleway',
     borderWidth: 1,
-    borderColor: '#636e72',
+    borderColor: '#ddd',
     minHeight: 150,
     marginBottom: 20,
     textAlignVertical: 'top',
   },
   modalButton: {
-    backgroundColor: '#6c5ce7',
+    backgroundColor: '#001f3f',
     borderRadius: 10,
     padding: 15,
     alignItems: 'center',
     marginTop: 10,
   },
   cancelButton: {
-    backgroundColor: '#636e72',
+    backgroundColor: '#ddd',
     marginTop: 10,
+  },
+  cancelButtonText: {
+    color: '#000',
+    fontSize: 16,
+    fontWeight: 'bold',
+    fontFamily: 'Raleway',
   },
   modalButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+    fontFamily: 'Raleway',
   },
   disabledButtonText: {
     opacity: 0.5,
@@ -383,12 +469,12 @@ const styles = StyleSheet.create({
   },
   comparisonCard: {
     flex: 1,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#fff',
     borderRadius: 12,
     padding: 15,
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#636e72',
+    borderColor: '#ddd',
     minHeight: 280,
     justifyContent: 'flex-start',
     minWidth: '45%',
@@ -398,26 +484,29 @@ const styles = StyleSheet.create({
     height: 140,
     borderRadius: 8,
     marginBottom: 10,
-    backgroundColor: '#2d3436',
+    backgroundColor: '#f5f5f5',
   },
   comparisonGameNameCenter: {
-    color: '#fff',
+    color: '#000',
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: 'Raleway',
     textAlign: 'center',
     marginBottom: 10,
     paddingHorizontal: 5,
   },
   comparisonGameGenre: {
-    color: '#95a5a6',
+    color: '#000',
     fontSize: 14,
+    fontFamily: 'Raleway',
     marginTop: 4,
     textAlign: 'center',
   },
   ratingScore: {
-    color: '#fdcb6e',
+    color: '#001f3f',
     fontSize: 20,
     fontWeight: 'bold',
+    fontFamily: 'ProximaNova-Bold',
     marginTop: 8,
     textAlign: 'center',
   },
@@ -433,18 +522,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   undoButton: {
-    backgroundColor: '#636e72',
+    backgroundColor: '#ddd',
+  },
+  undoButtonText: {
+    color: '#000',
+    fontSize: 14,
+    fontWeight: 'bold',
+    fontFamily: 'Raleway',
   },
   tooToughButton: {
-    backgroundColor: '#fdcb6e',
+    backgroundColor: '#001f3f',
   },
   skipButton: {
-    backgroundColor: '#74b9ff',
+    backgroundColor: '#001f3f',
   },
   actionButtonText: {
     color: '#fff',
     fontSize: 14,
     fontWeight: 'bold',
+    fontFamily: 'Raleway',
   },
 });
+
 

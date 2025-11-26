@@ -9,8 +9,8 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
+  SafeAreaView,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { authService } from '../services/supabaseService';
 
 export default function AuthScreen({ onAuthSuccess }) {
@@ -18,6 +18,8 @@ export default function AuthScreen({ onAuthSuccess }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleAuth = async () => {
@@ -28,6 +30,11 @@ export default function AuthScreen({ onAuthSuccess }) {
 
     if (!isLogin && !username) {
       Alert.alert('Error', 'Please enter a username');
+      return;
+    }
+
+    if (!isLogin && (!firstName || !lastName)) {
+      Alert.alert('Error', 'Please enter both first name and last name');
       return;
     }
 
@@ -54,7 +61,13 @@ export default function AuthScreen({ onAuthSuccess }) {
         result = await authService.signIn(email, password);
       } else {
         // Sign up
-        result = await authService.signUp(email, password, username || email.split('@')[0]);
+        result = await authService.signUp(
+          email, 
+          password, 
+          username || email.split('@')[0],
+          firstName,
+          lastName
+        );
       }
 
       if (result.error) {
@@ -74,35 +87,49 @@ export default function AuthScreen({ onAuthSuccess }) {
   };
 
   return (
-    <LinearGradient
-      colors={['#1a1a2e', '#16213e', '#0f3460']}
-      style={styles.container}
-    >
+    <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
         <View style={styles.content}>
-          <Text style={styles.title}>GameRank</Text>
-          <Text style={styles.subtitle}>
-            Rank and share your favorite games
-          </Text>
+          <View style={styles.logoContainer}>
+            <Text style={styles.title}>Cartridge</Text>
+          </View>
 
           {!isLogin && (
-            <TextInput
-              style={styles.input}
-              placeholder="Username"
-              placeholderTextColor="#95a5a6"
-              value={username}
-              onChangeText={setUsername}
-              autoCapitalize="none"
-            />
+            <>
+              <TextInput
+                style={styles.input}
+                placeholder="First Name"
+                placeholderTextColor="#999"
+                value={firstName}
+                onChangeText={setFirstName}
+                autoCapitalize="words"
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Last Name"
+                placeholderTextColor="#999"
+                value={lastName}
+                onChangeText={setLastName}
+                autoCapitalize="words"
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Username"
+                placeholderTextColor="#999"
+                value={username}
+                onChangeText={setUsername}
+                autoCapitalize="none"
+              />
+            </>
           )}
 
           <TextInput
             style={styles.input}
             placeholder="Email"
-            placeholderTextColor="#95a5a6"
+            placeholderTextColor="#999"
             value={email}
             onChangeText={setEmail}
             keyboardType="email-address"
@@ -112,7 +139,7 @@ export default function AuthScreen({ onAuthSuccess }) {
           <TextInput
             style={styles.input}
             placeholder="Password"
-            placeholderTextColor="#95a5a6"
+            placeholderTextColor="#999"
             value={password}
             onChangeText={setPassword}
             secureTextEntry
@@ -144,13 +171,14 @@ export default function AuthScreen({ onAuthSuccess }) {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
-    </LinearGradient>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#fff',
   },
   keyboardView: {
     flex: 1,
@@ -160,31 +188,30 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 20,
   },
-  title: {
-    fontSize: 48,
-    fontWeight: 'bold',
-    color: '#fff',
-    textAlign: 'center',
-    marginBottom: 10,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#b2bec3',
-    textAlign: 'center',
+  logoContainer: {
+    alignItems: 'center',
     marginBottom: 40,
   },
+  title: {
+    fontSize: 36,
+    fontWeight: 'bold',
+    fontFamily: 'PlayfairDisplaySC-Bold',
+    color: '#000',
+    textAlign: 'center',
+  },
   input: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: '#fff',
     borderRadius: 10,
     padding: 15,
     marginBottom: 15,
-    color: '#fff',
+    color: '#000',
     fontSize: 16,
+    fontFamily: 'Raleway',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: '#ddd',
   },
   button: {
-    backgroundColor: '#6c5ce7',
+    backgroundColor: '#001f3f',
     borderRadius: 10,
     padding: 15,
     alignItems: 'center',
@@ -194,14 +221,16 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
+    fontFamily: 'Raleway',
   },
   switchButton: {
     marginTop: 20,
     alignItems: 'center',
   },
   switchText: {
-    color: '#74b9ff',
+    color: '#001f3f',
     fontSize: 14,
+    fontFamily: 'Raleway',
   },
   buttonDisabled: {
     opacity: 0.6,

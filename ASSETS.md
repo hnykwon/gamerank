@@ -1,13 +1,14 @@
 # Assets Required
 
-The app references some asset files in `app.json`. You'll need to create these:
+The app now uses the N64 game cartridge logo (`assets/Cartridge Logo.png`) as the main logo.
 
-- `assets/icon.png` - App icon (1024x1024 recommended)
-- `assets/splash.png` - Splash screen image
-- `assets/adaptive-icon.png` - Android adaptive icon
-- `assets/favicon.png` - Web favicon
+## Logo Files
 
-For now, you can use placeholder images or create simple colored squares. The app will work without these, but you'll see warnings.
+- `assets/Cartridge Logo.png` - Main logo (N64 game cartridge design)
 
-To create placeholder assets quickly, you can use online tools or image editors to create simple colored squares with the app name.
+The logo is configured in `app.json` for:
+- App icon (iOS & Android)
+- Splash screen
+- Android adaptive icon
+- Web favicon
 

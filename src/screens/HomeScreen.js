@@ -11,7 +11,7 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../config/supabase';
 import { rankingsService } from '../services/supabaseService';
-import GameImage from '../components/GameImage';
+import AppHeader from '../components/AppHeader';
 
 export default function HomeScreen() {
   const [rankings, setRankings] = useState([]);
@@ -89,33 +89,22 @@ export default function HomeScreen() {
       style={styles.rankingItem}
       onPress={() => navigation.navigate('GameDetail', { game: item })}
     >
-      <View style={styles.rankNumber}>
-        <Text style={styles.rankText}>#{index + 1}</Text>
-      </View>
-      <GameImage 
-        gameName={item.game_name || item.name}
-        style={styles.gameImage}
-        resizeMode="cover"
-      />
+      <Text style={styles.rankText}>{index + 1}</Text>
       <View style={styles.gameInfo}>
         <Text style={styles.gameName}>{item.game_name || item.name}</Text>
         <Text style={styles.gameGenre}>{item.genre || 'Unknown Genre'}</Text>
       </View>
-      <View style={styles.ratingBadge}>
-        <Text style={styles.ratingText}>{Math.max(0, Math.min(10, parseFloat(item.rating || 0))).toFixed(1)}</Text>
-      </View>
+      {item.rating && (
+        <View style={styles.ratingBadge}>
+          <Text style={styles.ratingText}>{Math.max(0, Math.min(10, parseFloat(item.rating || 0))).toFixed(1)}</Text>
+        </View>
+      )}
     </TouchableOpacity>
   );
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>My Game Rankings</Text>
-        <Text style={styles.headerSubtitle}>
-          {rankings.length} {rankings.length === 1 ? 'game' : 'games'} ranked
-        </Text>
-      </View>
-
+      <AppHeader />
       {rankings.length === 0 ? (
         <View style={styles.emptyState}>
           <Text style={styles.emptyText}>No games ranked yet</Text>
@@ -147,80 +136,76 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#fff',
   },
   header: {
     padding: 20,
     paddingTop: 60,
-    backgroundColor: '#16213e',
+    backgroundColor: '#fff',
   },
   headerTitle: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#fff',
+    fontFamily: 'Raleway',
+    color: '#000',
     marginBottom: 5,
   },
   headerSubtitle: {
     fontSize: 14,
-    color: '#b2bec3',
+    fontFamily: 'Raleway',
+    color: '#666',
   },
   list: {
     padding: 15,
+    paddingTop: 20,
   },
   rankingItem: {
     flexDirection: 'row',
-    backgroundColor: '#2d3436',
-    borderRadius: 12,
     padding: 15,
-    marginBottom: 12,
+    paddingBottom: 15,
     alignItems: 'center',
-    borderLeftWidth: 4,
-    borderLeftColor: '#6c5ce7',
-  },
-  rankNumber: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#6c5ce7',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 15,
-  },
-  gameImage: {
-    width: 60,
-    height: 80,
-    borderRadius: 8,
-    marginRight: 15,
-    backgroundColor: '#1a1a2e',
+    borderBottomWidth: 1,
+    borderBottomColor: '#ddd',
   },
   rankText: {
-    color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
+    fontFamily: 'ProximaNova-Bold',
+    color: '#001f3f',
+    width: 40,
+    marginRight: 0,
   },
   gameInfo: {
     flex: 1,
+    marginRight: 80,
   },
   gameName: {
-    color: '#fff',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
-    marginBottom: 5,
+    fontFamily: 'Raleway',
+    color: '#000',
+    marginBottom: 3,
   },
   gameGenre: {
-    color: '#95a5a6',
-    fontSize: 14,
+    fontSize: 12,
+    fontFamily: 'Raleway',
+    color: '#666',
   },
   ratingBadge: {
-    backgroundColor: '#00b894',
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: '#000',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   ratingText: {
-    color: '#fff',
+    color: '#000',
     fontSize: 14,
     fontWeight: 'bold',
+    fontFamily: 'ProximaNova-Bold',
   },
   emptyState: {
     flex: 1,
@@ -231,17 +216,19 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#fff',
+    fontFamily: 'Raleway',
+    color: '#000',
     marginBottom: 10,
   },
   emptySubtext: {
     fontSize: 16,
-    color: '#95a5a6',
+    fontFamily: 'Raleway',
+    color: '#666',
     textAlign: 'center',
     marginBottom: 30,
   },
   emptyButton: {
-    backgroundColor: '#6c5ce7',
+    backgroundColor: '#001f3f',
     borderRadius: 10,
     paddingHorizontal: 30,
     paddingVertical: 15,
@@ -250,6 +237,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+    fontFamily: 'Raleway',
   },
 });
 

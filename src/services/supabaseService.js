@@ -1,9 +1,9 @@
-import { supabase } from '../config/supabase';
+import { supabase } from '../config/supabase.js';
 
 // Authentication functions
 export const authService = {
   // Sign up a new user
-  async signUp(email, password, username) {
+  async signUp(email, password, username, firstName = null, lastName = null) {
     try {
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -11,6 +11,8 @@ export const authService = {
         options: {
           data: {
             username: username,
+            first_name: firstName,
+            last_name: lastName,
           },
         },
       });
@@ -26,6 +28,8 @@ export const authService = {
               id: data.user.id,
               username: username,
               email: email,
+              first_name: firstName,
+              last_name: lastName,
             },
           ])
           .select();
@@ -218,6 +222,104 @@ export const rankingsService = {
       }));
 
       return { data: averages, error: null };
+    } catch (error) {
+      return { data: null, error };
+    }
+  },
+};
+
+// Games service for managing game data and prices
+export const gamesService = {
+  // Get a game by name
+  async getGameByName(gameName) {
+    try {
+      const { data, error } = await supabase
+        .from('games')
+        .select('*')
+        .eq('name', gameName)
+        .single();
+
+      if (error && error.code !== 'PGRST116') throw error; // PGRST116 = not found
+      return { data, error: null };
+    } catch (error) {
+      return { data: null, error };
+    }
+  },
+
+  // Get multiple games by names
+  async getGamesByNames(gameNames) {
+    try {
+      const { data, error } = await supabase
+        .from('games')
+        .select('*')
+        .in('name', gameNames);
+
+      if (error) throw error;
+      return { data, error: null };
+    } catch (error) {
+      return { data: null, error };
+    }
+  },
+
+  // Upsert a game (insert or update)
+  async upsertGame(game) {
+    try {
+      const { data, error } = await supabase
+        .from('games')
+        .upsert({
+          name: game.name,
+          genre: game.genre || null,
+          image_url: game.imageUrl || null,
+          price: game.price || null,
+          rawg_id: game.id || null,
+          released: game.released || null,
+          rating: game.rating || null,
+          platforms: game.platforms || null,
+          price_updated_at: game.price ? new Date().toISOString() : null,
+        }, {
+          onConflict: 'name',
+          ignoreDuplicates: false,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return { data, error: null };
+    } catch (error) {
+      return { data: null, error };
+    }
+  },
+
+  // Update game price
+  async updateGamePrice(gameName, price) {
+    try {
+      const { data, error } = await supabase
+        .from('games')
+        .update({
+          price: price,
+          price_updated_at: new Date().toISOString(),
+        })
+        .eq('name', gameName)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return { data, error: null };
+    } catch (error) {
+      return { data: null, error };
+    }
+  },
+
+  // Get all games
+  async getAllGames() {
+    try {
+      const { data, error } = await supabase
+        .from('games')
+        .select('*')
+        .order('name', { ascending: true });
+
+      if (error) throw error;
+      return { data, error: null };
     } catch (error) {
       return { data: null, error };
     }

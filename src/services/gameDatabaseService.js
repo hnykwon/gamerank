@@ -1,8 +1,8 @@
 // Game Database Service using RAWG.io API
 // Fetches games dynamically from RAWG.io instead of using a static list
 
-import { gameList as fallbackGameList } from '../data/gameList';
-import { trackAPIResponse, initUsageTracker } from './rawgUsageTracker';
+import { gameList as fallbackGameList } from '../data/gameList.js';
+import { trackAPIResponse, initUsageTracker } from './rawgUsageTracker.js';
 
 const RAWG_API_KEY = 'd2b865c2d8ea46bda24975b72b12fb90';
 
@@ -260,6 +260,54 @@ export const getAllGames = async () => {
   } catch (error) {
     console.warn('Failed to get all games, using fallback:', error.message);
     return fallbackGameList;
+  }
+};
+
+/**
+ * Fetches detailed game information by ID from RAWG.io
+ * @param {number} gameId - RAWG game ID
+ * @returns {Promise<Object|null>} - Detailed game object or null
+ */
+export const fetchGameDetailsById = async (gameId) => {
+  const cacheKey = `details_${gameId}`;
+  
+  if (gameListCache.has(cacheKey)) {
+    return gameListCache.get(cacheKey);
+  }
+
+  try {
+    const url = `https://api.rawg.io/api/games/${gameId}?key=${RAWG_API_KEY}`;
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      throw new Error(`API request failed with status ${response.status}`);
+    }
+
+    await trackAPIResponse(response);
+    const data = await response.json();
+
+    const gameDetails = {
+      id: data.id,
+      name: data.name,
+      genre: data.genres && data.genres.length > 0 ? data.genres[0].name : 'Unknown',
+      imageUrl: data.background_image || null,
+      rating: data.rating || 0,
+      released: data.released,
+      platforms: data.platforms ? data.platforms.map(p => p.platform.name) : [],
+      description: data.description_raw || data.description || '',
+      website: data.website || null,
+      stores: data.stores ? data.stores.map(store => ({
+        id: store.store?.id,
+        name: store.store?.name,
+        url: store.url,
+      })) : [],
+    };
+
+    gameListCache.set(cacheKey, gameDetails);
+    return gameDetails;
+  } catch (error) {
+    console.warn(`Failed to fetch game details for ID ${gameId}:`, error.message);
+    return null;
   }
 };
 

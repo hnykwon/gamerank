@@ -3,6 +3,8 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StatusBar } from 'expo-status-bar';
+import { useFonts } from 'expo-font';
+import { Raleway_400Regular, Raleway_600SemiBold, Raleway_700Bold } from '@expo-google-fonts/raleway';
 import { supabase } from './src/config/supabase';
 
 import AuthScreen from './src/screens/AuthScreen';
@@ -13,6 +15,7 @@ import DiscoverScreen from './src/screens/DiscoverScreen';
 import GameDetailScreen from './src/screens/GameDetailScreen';
 import SocialFeedScreen from './src/screens/SocialFeedScreen';
 import LeaderboardScreen from './src/screens/LeaderboardScreen';
+import LoadingScreen from './src/components/LoadingScreen';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -21,16 +24,13 @@ function MainTabs() {
   return (
     <Tab.Navigator
       screenOptions={{
-        tabBarActiveTintColor: '#6c5ce7',
-        tabBarInactiveTintColor: '#95a5a6',
+        tabBarActiveTintColor: '#001f3f',
+        tabBarInactiveTintColor: '#666',
         tabBarStyle: {
-          backgroundColor: '#2d3436',
-          borderTopColor: '#636e72',
+          backgroundColor: '#fff',
+          borderTopColor: '#ddd',
         },
-        headerStyle: {
-          backgroundColor: '#1a1a2e',
-        },
-        headerTintColor: '#fff',
+        headerShown: false,
       }}
     >
       <Tab.Screen 
@@ -65,6 +65,16 @@ function MainTabs() {
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Load fonts
+  // Playfair Display SC is used for the "Cartridge" logo text
+  const [fontsLoaded] = useFonts({
+    'Raleway': Raleway_400Regular,
+    'Raleway-SemiBold': Raleway_600SemiBold,
+    'Raleway-Bold': Raleway_700Bold,
+    'PlayfairDisplaySC-Regular': require('./assets/fonts/PlayfairDisplaySC-Regular.ttf'),
+    'PlayfairDisplaySC-Bold': require('./assets/fonts/PlayfairDisplaySC-Bold.ttf'),
+  });
 
   useEffect(() => {
     checkAuth();
@@ -100,13 +110,13 @@ export default function App() {
     }
   };
 
-  if (isLoading) {
-    return null; // You can add a loading screen here
+  if (isLoading || !fontsLoaded) {
+    return <LoadingScreen />;
   }
 
   return (
     <NavigationContainer>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {!isAuthenticated ? (
           <Stack.Screen name="Auth" options={{ animationEnabled: false }}>
@@ -120,8 +130,8 @@ export default function App() {
               component={GameDetailScreen}
               options={{
                 headerShown: true,
-                headerStyle: { backgroundColor: '#1a1a2e' },
-                headerTintColor: '#fff',
+                headerStyle: { backgroundColor: '#fff' },
+                headerTintColor: '#000',
               }}
             />
             <Stack.Screen 
@@ -129,8 +139,8 @@ export default function App() {
               component={RankScreen}
               options={{
                 headerShown: true,
-                headerStyle: { backgroundColor: '#1a1a2e' },
-                headerTintColor: '#fff',
+                headerStyle: { backgroundColor: '#fff' },
+                headerTintColor: '#000',
                 title: 'Rank a New Game',
               }}
             />

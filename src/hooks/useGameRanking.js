@@ -59,6 +59,7 @@ export function useGameRanking(onSuccess) {
     setSelectedGame({
       name: game.name,
       genre: game.genre || 'Unknown',
+      price: game.price || null,
     });
     setSelectedStarRating(0);
     setNotes('');
@@ -74,8 +75,7 @@ export function useGameRanking(onSuccess) {
     // Get games with the same star rating, sorted by rating
     const gamesInSameCategory = existingGames
       .filter(game => {
-        const gameStars = Math.floor(parseFloat(game.rating) / 2);
-        return gameStars === stars;
+        return game.starRating === stars;
       })
       .sort((a, b) => parseFloat(b.rating) - parseFloat(a.rating));
 
@@ -102,13 +102,18 @@ export function useGameRanking(onSuccess) {
 
   // Calculate rating based on position
   const calculateRating = (position, totalGames, starRating) => {
-    const baseScore = starRating * 2;
+    // Base score is the minimum for this star category
+    // 1 star: 0-2, 2 stars: 2-4, 3 stars: 4-6, 4 stars: 6-8, 5 stars: 8-10
+    const baseScore = (starRating - 1) * 2;
     
     if (totalGames === 0) {
-      return baseScore;
+      // If no games to compare, use middle of the range
+      return baseScore + 1;
     }
     
-    const positionOffset = 0.9 - (position / totalGames) * 0.8;
+    // Position offset ranges from 0 to 2 (the width of each star category)
+    // position 0 (best) gets offset 2, position totalGames (worst) gets offset 0
+    const positionOffset = 2 - (position / totalGames) * 2;
     return baseScore + positionOffset;
   };
 
